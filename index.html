@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2025年社區消費大獎賞記錄</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <div id="login">
+      <h2>登入</h2>
+      <input type="password" id="password" class="form-control" placeholder="輸入密碼">
+      <button onclick="checkPassword()" class="btn btn-primary mt-2">登入</button>
+      <p id="error" class="text-danger mt-2" style="display:none;">密碼錯誤</p>
+    </div>
+    <div id="main" style="display:none;">
+      <h2>2025年社區消費大獎賞記錄</h2>
+      <p>歡迎使用本工具。請先選擇週數，然後為每種支付方式選擇三次抽獎獲得的優惠券金額。系統會自動計算每個支付方式的優惠券總額和所需消費金額，以及本週的總計。完成後，請點擊'保存'按鈕。</p>
+      <label for="week-select">選擇週數：</label>
+      <select id="week-select" class="form-select mb-3">
+        <option value="week1">第1週：3月24日 - 3月30日</option>
+        <option value="week2">第2週：3月31日 - 4月6日</option>
+        <option value="week3">第3週：4月7日 - 4月13日</option>
+        <option value="week4">第4週：4月14日 - 4月20日</option>
+        <option value="week5">第5週：4月21日 - 4月27日</option>
+        <option value="week6">第6週：4月28日 - 5月4日</option>
+        <option value="week7">第7週：5月5日 - 5月11日</option>
+        <option value="week8">第8週：5月12日 - 5月18日</option>
+        <option value="week9">第9週：5月19日 - 5月25日</option>
+        <option value="week10">第10週：5月26日 - 6月1日</option>
+      </select>
+      <div class="row" id="payment-methods">
+        <!-- 中銀 -->
+        <div class="col-md-6 col-lg-4 mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">中銀</h5>
+              <label>抽獎1：
+                <select class="form-select draw" data-method="boc" data-draw="1">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎2：
+                <select class="form-select draw" data-method="boc" data-draw="2">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎3：
+                <select class="form-select draw" data-method="boc" data-draw="3">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <p>優惠券總額：<span class="total" data-method="boc">0</span></p>
+              <p>所需消費金額：<span class="required" data-method="boc">0</span></p>
+            </div>
+          </div>
+        </div>
+        <!-- 工商 -->
+        <div class="col-md-6 col-lg-4 mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">工商</h5>
+              <label>抽獎1：
+                <select class="form-select draw" data-method="icbc" data-draw="1">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎2：
+                <select class="form-select draw" data-method="icbc" data-draw="2">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎3：
+                <select class="form-select draw" data-method="icbc" data-draw="3">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <p>優惠券總額：<span class="total" data-method="icbc">0</span></p>
+              <p>所需消費金額：<span class="required" data-method="icbc">0</span></p>
+            </div>
+          </div>
+        </div>
+        <!-- 國際 -->
+        <div class="col-md-6 col-lg-4 mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">國際</h5>
+              <label>抽獎1：
+                <select class="form-select draw" data-method="bocom" data-draw="1">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎2：
+                <select class="form-select draw" data-method="bocom" data-draw="2">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎3：
+                <select class="form-select draw" data-method="bocom" data-draw="3">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <p>優惠券總額：<span class="total" data-method="bocom">0</span></p>
+              <p>所需消費金額：<span class="required" data-method="bocom">0</span></p>
+            </div>
+          </div>
+        </div>
+        <!-- 大豐 -->
+        <div class="col-md-6 col-lg-4 mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">大豐</h5>
+              <label>抽獎1：
+                <select class="form-select draw" data-method="tfb" data-draw="1">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎2：
+                <select class="form-select draw" data-method="tfb" data-draw="2">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎3：
+                <select class="form-select draw" data-method="tfb" data-draw="3">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <p>優惠券總額：<span class="total" data-method="tfb">0</span></p>
+              <p>所需消費金額：<span class="required" data-method="tfb">0</span></p>
+            </div>
+          </div>
+        </div>
+        <!-- MPay -->
+        <div class="col-md-6 col-lg-4 mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">MPay</h5>
+              <label>抽獎1：
+                <select class="form-select draw" data-method="mpay" data-draw="1">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎2：
+                <select class="form-select draw" data-method="mpay" data-draw="2">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎3：
+                <select class="form-select draw" data-method="mpay" data-draw="3">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <p>優惠券總額：<span class="total" data-method="mpay">0</span></p>
+              <p>所需消費金額：<span class="required" data-method="mpay">0</span></p>
+            </div>
+          </div>
+        </div>
+        <!-- UEPay -->
+        <div class="col-md-6 col-lg-4 mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">UEPay</h5>
+              <label>抽獎1：
+                <select class="form-select draw" data-method="uepay" data-draw="1">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎2：
+                <select class="form-select draw" data-method="uepay" data-draw="2">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <label>抽獎3：
+                <select class="form-select draw" data-method="uepay" data-draw="3">
+                  <option value="0">未中獎</option>
+                  <option value="10">10元</option>
+                  <option value="20">20元</option>
+                  <option value="50">50元</option>
+                  <option value="100">100元</option>
+                  <option value="200">200元</option>
+                </select>
+              </label>
+              <p>優惠券總額：<span class="total" data-method="uepay">0</span></p>
+              <p>所需消費金額：<span class="required" data-method="uepay">0</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <h4>本週總計所需消費金額：<span id="weekly-total">0</span></h4>
+      <button id="save-btn" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
