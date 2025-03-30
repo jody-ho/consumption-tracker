@@ -7,86 +7,138 @@ const firebaseConfig = {
   messagingSenderId: "94291975544",
   appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
 };
-
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// Define payment methods
-const paymentMethods = [
-  { key: 'boc', name: '中銀' },
-  { key: 'icbc', name: '工商' },
-  { key: 'bocom', name: '國際' },
-  { key: 'tfb', name: '大豐' },
-  { key: 'mpay', name: 'MPay' },
-  { key: 'uepay', name: 'UEPay' }
-];
+// Load last used family role from localStorage
+const familyRoles = ["Dad", "Mom", "Son", "Daughter", "Grandpa", "Grandma"];
+document.getElementById('family-role').value = localStorage.getItem('lastFamilyRole') || "Dad";
 
-// Password for login
-const correctPassword = '960417'; // Replace with your password
+// Event listener for family role change
+document.getElementById('family-role').addEventListener('change', (e) => {
+  localStorage.setItem('lastFamilyRole', e.target.value);
+});
 
-// Login function
-function checkPassword() {
-  const input = document.getElementById('password').value;
-  if (input === correctPassword) {
-    document.getElementById('login').style.display = 'none';
-    document.getElementById('main').style.display = 'block';
-    loadWeekData();
-  } else {
-    document.getElementById('error').style.display = 'block';
-  }
-}
+// Initialize variables
+let currentDraws = {};
 
-// Load week data
-let unsubscribe = null;
+// Function to load data from Firestore
 function loadWeekData() {
-  if (unsubscribe) {
-    unsubscribe();
-  }
   const selectedWeek = document.getElementById('week-select').value;
-  unsubscribe = db.collection('weeks').doc(selectedWeek).onSnapshot(doc => {
+  db.doc(`weeks/${selectedWeek}`).onSnapshot(doc => {
     if (doc.exists) {
-      const data = doc.data();
-      document.querySelectorAll('.draw').forEach(select => {
-        const method = select.dataset.method;
-        const draw = select.dataset.draw;
-        select.value = data.payments[method]['draw' + draw] || 0;
-      });
+      currentDraws = doc.data().draws || {};
     } else {
-      document.querySelectorAll('.draw').forEach(select => {
-        select.value = 0;
-      });
+      currentDraws = {};
     }
+    updateTable();
     calculateTotals();
   });
 }
 
-// Calculate totals
-function calculateTotals() {
-  let weeklyTotal = 0;
-  paymentMethods.forEach(method => {
-    const draws = [1,2,3].map(draw => parseInt(document.querySelector(`.draw[data-method="${method.key}"][data-draw="${draw}"]`).value) || 0);
-    const total = draws.reduce((sum, val) => sum + val, 0);
-    const required = total * 3;
-    document.querySelector(`.total[data-method="${method.key}"]`).textContent = total;
-    document.querySelector(`.required[data-method="${method.key}"]`).textContent = required;
-    weeklyTotal += required;
+// Function to add a new draw
+document.getElementById('add-draw').addEventListener('click', () => {
+  const familyRole = document.getElementById('family-role').value;
+  const paymentMethod = document.getElementById('payment-method').value;
+  const drawValue = parseInt(document.getElementById('draw-value').value);
+
+  if (!currentDraws[paymentMethod]) {
+    currentDraws[paymentMethod] = [];
+  }
+
+  // Ensure we have 3 draws, fill with {value: 0, used: false} if less
+  while (currentDraws[paymentMethod].length < 3) {
+    currentDraws[paymentMethod].push({ value: 0, used: false, familyRole: "" });
+  }
+
+  // Find the first null or 0 value to replace
+  let replaced = false;
+  for (let i = 0; i < 3; i++) {
+    if (currentDraws[paymentMethod][i].value === 0 || currentDraws[paymentMethod][i].value === null) {
+      currentDraws[paymentMethod][i] = { value: drawValue, used: false, familyRole: familyRole };
+      replaced = true;
+      break;
+    }
+  }
+
+  if (!replaced) {
+    alert("每個支付方式最多3次抽獎，已滿！");
+    return;
+  }
+
+  saveData();
+});
+
+// Function to update the table display
+function updateTable() {
+  const tbody = document.querySelector('#draws-table tbody');
+  tbody.innerHTML = '';
+  for (const [method, draws] of Object.entries(currentDraws)) {
+    draws.forEach((draw, index) => {
+      if (draw.value > 0) { // Only show draws with value > 0
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${draw.familyRole}</td>
+          <td>${getMethodName(method)}</td>
+          <td>抽獎 ${index + 1}</td>
+          <td>${draw.value} 元</td>
+          <td>
+            <input type="checkbox" class="used-checkbox" data-method="${method}" data-index="${index}" ${draw.used ? 'checked' : ''}>
+          </td>
+          <td>已使用</td>
+        `;
+        tbody.appendChild(row);
+      }
+    });
+  }
+
+  // Add event listeners for used checkboxes
+  document.querySelectorAll('.used-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+      const method = e.target.dataset.method;
+      const index = parseInt(e.target.dataset.index);
+      currentDraws[method][index].used = e.target.checked;
+      saveData();
+    });
   });
-  document.getElementById('weekly-total').textContent = weeklyTotal;
 }
 
-// Save data
+// Function to get payment method name
+function getMethodName(key) {
+  const method = paymentMethods.find(m => m.key === key);
+  return method ? method.name : key;
+}
+
+// Function to calculate totals
+function calculateTotals() {
+  let totalRequired = 0;
+  const roleTotals = {};
+
+  for (const [method, draws] of Object.entries(currentDraws)) {
+    draws.forEach(draw => {
+      if (draw.value > 0 && !draw.used) {
+        const required = draw.value * 3;
+        totalRequired += required;
+        if (draw.familyRole) {
+          roleTotals[draw.familyRole] = (roleTotals[draw.familyRole] || 0) + required;
+        }
+      }
+    });
+  }
+
+  document.getElementById('total-required').textContent = totalRequired;
+  const roleTotalsDiv = document.getElementById('role-totals');
+  roleTotalsDiv.innerHTML = '<h5>小計：</h5>';
+  for (const [role, amount] of Object.entries(roleTotals)) {
+    roleTotalsDiv.innerHTML += `<p>${role}: ${amount} 元</p>`;
+  }
+}
+
+// Function to save data to Firestore
 function saveData() {
   const selectedWeek = document.getElementById('week-select').value;
-  const data = { payments: {} };
-  paymentMethods.forEach(method => {
-    data.payments[method.key] = {
-      draw1: parseInt(document.querySelector(`.draw[data-method="${method.key}"][data-draw="1"]`).value) || 0,
-      draw2: parseInt(document.querySelector(`.draw[data-method="${method.key}"][data-draw="2"]`).value) || 0,
-      draw3: parseInt(document.querySelector(`.draw[data-method="${method.key}"][data-draw="3"]`).value) || 0
-    };
-  });
-  db.collection('weeks').doc(selectedWeek).set(data)
+  db.doc(`weeks/${selectedWeek}`).set({ draws: currentDraws })
     .then(() => {
       alert('數據保存成功');
     })
@@ -98,6 +150,6 @@ function saveData() {
 // Event listeners
 document.getElementById('week-select').addEventListener('change', loadWeekData);
 document.getElementById('save-btn').addEventListener('click', saveData);
-document.querySelectorAll('.draw').forEach(select => {
-  select.addEventListener('change', calculateTotals);
-});
+
+// Initial load
+loadWeekData();
