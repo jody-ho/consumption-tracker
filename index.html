@@ -20,6 +20,9 @@
     label, select, input {
       margin: 0.25rem;
     }
+    select, button {
+      font-size: 1.2rem;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -97,6 +100,7 @@
   <h1>🏠 消費獎賞2025 – 家庭紀錄表</h1>
 
   <button id="myBtn">新增優惠券</button>
+  <button id="exportBtn">導出記錄 (Excel)</button>
 
   <!-- Modal -->
   <div id="myModal" class="modal">
@@ -142,6 +146,12 @@
     </div>
   </div>
 
+  <!-- 週次選擇 -->
+  <label>選擇週次：</label>
+  <select id="weekSelect">
+    <!-- 會在 JavaScript 裡自動填充 -->
+  </select>
+
   <table>
     <thead>
       <tr>
@@ -159,7 +169,8 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, push, onValue, remove, update, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import * as XLSX from 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
@@ -174,8 +185,8 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const couponsRef = ref(db, 'coupons');
+    const weeksRef = ref(db, 'weeks');
 
-    // 用於新增資料的函式
     function addEntries() {
       const member = document.getElementById('member').value;
       const method = document.getElementById('method').value;
@@ -198,6 +209,7 @@
       const tbody = document.getElementById('couponTable');
       tbody.innerHTML = '';
       const summary = {};
+      const methodsSummary = {};
 
       Object.entries(coupons).forEach(([key, c]) => {
         const row = document.createElement('tr');
@@ -217,55 +229,84 @@
         if (!summary[c.member]) {
           summary[c.member] = { need: 0, used: 0 };
         }
-        if (!c.used) summary[c.member].need += c.amount * 3;
-        else summary[c.member].used += c.amount * 3;
+        if (!c.used) summary[c.member].need += c.amount;
+        else summary[c.member].used += c.amount;
+
+        if (!methodsSummary[c.method]) {
+          methodsSummary[c.method] = { need: 0, used: 0 };
+        }
+        if (!c.used) methodsSummary[c.method].need += c.amount;
+        else methodsSummary[c.method].used += c.amount;
       });
 
-      const summaryDiv = document.getElementById('summary');
-      summaryDiv.innerHTML = '<strong>每人本週需消費金額與已使用金額：</strong><br>';
-      Object.entries(summary).forEach(([member, s]) => {
-        summaryDiv.innerHTML += `${member}：需消費 $${s.need}｜已消費 $${s.used}<br>`;
+      let summaryText = '';
+      for (const member in summary) {
+        summaryText += `${member}: 本週可消費金額 ${summary[member].need}，已消費金額 ${summary[member].used} <br>`;
+      }
+
+      let methodsText = '';
+      for (const method in methodsSummary) {
+        methodsText += `${method}: 本週可消費金額 ${methodsSummary[method].need}，已消費金額 ${methodsSummary[method].used} <br>`;
+      }
+
+      document.getElementById('summary').innerHTML = `
+        <strong>每人本週可消費金額:</strong><br>
+        ${summaryText}
+        <strong>按支付方式總結:</strong><br>
+        ${methodsText}
+        <strong>整個家庭可消費金額:</strong><br>
+        ${Object.values(summary).reduce((total, s) => total + s.need, 0)}
+      `;
+    }
+
+    function markUsed(key, value) {
+      update(ref(db, `coupons/${key}`), { used: value });
+    }
+
+    function removeEntry(key) {
+      remove(ref(db, `coupons/${key}`));
+    }
+
+    // 導出為 Excel
+    function exportToExcel() {
+      onValue(couponsRef, (snapshot) => {
+        const coupons = snapshot.val();
+        const data = Object.entries(coupons).map(([key, c]) => ({
+          '家庭成員': c.member,
+          '支付方式': c.method,
+          '金額': c.amount,
+          '狀態': c.used ? '已使用' : '未使用',
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '優惠券紀錄');
+        XLSX.writeFile(wb, '優惠券紀錄.xlsx');
       });
     }
 
-    window.markUsed = (id, newStatus) => {
-      update(ref(db, `coupons/${id}`), { used: newStatus });
-    };
-
-    window.removeEntry = (id) => {
-      remove(ref(db, `coupons/${id}`));
-    };
+    document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 
     onValue(couponsRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      render(data);
+      render(snapshot.val() || {});
     });
 
-    // Modal 控制
+    // Modal 彈窗控制
     const modal = document.getElementById("myModal");
     const btn = document.getElementById("myBtn");
     const span = document.getElementsByClassName("close")[0];
-
-    btn.onclick = () => {
+    
+    btn.onclick = function() {
       modal.style.display = "block";
-    };
-
-    span.onclick = () => {
-      modal.style.display = "none";
-    };
-
-    window.onclick = (event) => {
-      if (event.target === modal) {
-        modal.style.display = "none";
-      }
-    };
-
-    function closeModal() {
+    }
+    span.onclick = function() {
       modal.style.display = "none";
     }
-
-    // 將新增優惠券按鈕的事件綁定到 addEntries 函式
-    document.getElementById("addBtn").onclick = addEntries;
+    window.onclick = function(event) {
+      if (event.target == modal) {
+        modal.style.display = "none";
+      }
+    }
   </script>
 </body>
 </html>
