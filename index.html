@@ -1,47 +1,193 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>消費獎賞2025</title>
-  <link rel="stylesheet" href="style.css">
+  <title>消費獎賞 2025 - 家庭紀錄表</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f7f7f7;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    table,
+    th,
+    td {
+      border: 1px solid #ccc;
+    }
+
+    th,
+    td {
+      padding: 8px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .form-popup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 20px;
+      border: 1px solid #ccc;
+      z-index: 1000;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .form-popup input,
+    .form-popup select {
+      width: 100%;
+      padding: 8px;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+
+    .form-popup button {
+      background-color: #008CBA;
+    }
+
+    .form-popup button.cancel {
+      background-color: red;
+    }
+
+    .form-popup button:hover {
+      background-color: #45a049;
+    }
+
+    .overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.4);
+      z-index: 999;
+    }
+
+    .icon-button {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      color: #45a049;
+    }
+
+    .header-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .header-actions .button-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .select-wrapper {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    label {
+      font-size: 16px;
+      color: #333;
+    }
+
+    select {
+      padding: 8px;
+      font-size: 16px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+
+    .underlined {
+      text-decoration: line-through;
+    }
+  </style>
 </head>
 
 <body>
-  <div id="container">
-    <h1>消費獎賞2025 - 家庭紀錄表</h1>
-    
-    <!-- 新增優惠券按鈕與日期範圍選擇 -->
-    <div id="controls">
-      <button id="addCouponBtn">新增優惠券</button>
-      <select id="dateRangeSelect">
-        <option value="2025/04/14-2025/04/20">2025/04/14 - 2025/04/20</option>
-        <option value="2025/04/21-2025/04/27">2025/04/21 - 2025/04/27</option>
-        <!-- Add more options here -->
-      </select>
-      <button id="exportExcelBtn" title="匯出至 Excel">📊</button>
+
+  <div class="container">
+    <h1>消費獎賞 2025 - 家庭紀錄表</h1>
+
+    <!-- 上方操作區域 -->
+    <div class="header-actions">
+      <div class="button-group">
+        <!-- 新增優惠券按鈕 -->
+        <button onclick="openForm()">新增優惠券</button>
+
+        <!-- 匯出到 Excel 按鈕（圖標） -->
+        <button class="icon-button" onclick="exportToExcel()">📥</button>
+      </div>
+
+      <!-- 日期範圍選擇 -->
+      <div class="select-wrapper">
+        <label for="weekSelect">選擇日期範圍：</label>
+        <select id="weekSelect" onchange="filterByWeek()">
+          <option value="">--選擇週次--</option>
+        </select>
+      </div>
     </div>
-    
-    <!-- 彈出式視窗新增優惠券 -->
-    <div id="addCouponForm" class="form-popup">
-      <form id="couponForm">
-        <label for="member">家庭成員</label>
-        <input type="text" id="member" name="member" required>
-        
-        <label for="payment">支付方式</label>
-        <input type="text" id="payment" name="payment" required>
-        
-        <label for="amount">金額</label>
-        <input type="number" id="amount" name="amount" required>
-        
-        <button type="submit">提交</button>
-        <button type="button" class="close" onclick="closeForm()">關閉</button>
-      </form>
-    </div>
-    
-    <!-- 資料顯示區域 -->
-    <h2>消費記錄</h2>
+
+    <!-- 匯總 -->
+    <h2>每週消費金額匯總</h2>
+    <table id="summaryTable">
+      <thead>
+        <tr>
+          <th>家庭成員</th>
+          <th>支付方式</th>
+          <th>可消費金額</th>
+        </tr>
+      </thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
+
+    <!-- 記錄表格 -->
+    <h2>優惠券記錄</h2>
     <table id="recordTable">
       <thead>
         <tr>
@@ -54,17 +200,33 @@
       <tbody id="recordBody"></tbody>
     </table>
 
-    <h2>每人可消費金額總結</h2>
-    <table id="summaryTable">
-      <thead>
-        <tr>
-          <th>家庭成員</th>
-          <th>支付方式</th>
-          <th>可消費金額</th>
-        </tr>
-      </thead>
-      <tbody id="summaryBody"></tbody>
-    </table>
+  </div>
+
+  <!-- 彈出式新增表單 -->
+  <div class="overlay" id="overlay"></div>
+  <div class="form-popup" id="popupForm">
+    <h3>新增優惠券</h3>
+    <label for="member">家庭成員：</label>
+    <select id="member">
+      <option value="爸爸">爸爸</option>
+      <option value="媽媽">媽媽</option>
+      <option value="家姐">家姐</option>
+      <option value="昌哥">昌哥</option>
+      <option value="妹妹">妹妹</option>
+    </select>
+    <label for="payment">支付方式：</label>
+    <select id="payment">
+      <option value="中銀">中銀</option>
+      <option value="工商">工商</option>
+      <option value="國際">國際</option>
+      <option value="大豐">大豐</option>
+      <option value="MPay">MPay</option>
+      <option value="UEPay">UEPay</option>
+    </select>
+    <label for="amount">金額（用逗號分隔）：</label>
+    <input type="text" id="amount" placeholder="例如：10,20,50">
+    <button onclick="addCoupon()">新增</button>
+    <button class="cancel" onclick="closeForm()">取消</button>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
@@ -74,135 +236,148 @@
     const firebaseConfig = {
       apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
       authDomain: "testing-a7aba.firebaseapp.com",
+      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/",
       projectId: "testing-a7aba",
       storageBucket: "testing-a7aba.appspot.com",
       messagingSenderId: "94291975544",
       appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
     };
 
-    // 初始化 Firebase
     const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.database(app);
+    const db = firebase.database();
 
     let couponData = [];
+    let weekData = [];
 
-    // 開啟新增優惠券表單
-    document.getElementById("addCouponBtn").addEventListener("click", openForm);
-
+    // 開啟表單
     function openForm() {
-      document.getElementById("addCouponForm").style.display = "block";
+      document.getElementById("popupForm").style.display = "block";
+      document.getElementById("overlay").style.display = "block";
     }
 
-    // 關閉新增優惠券表單
+    // 關閉表單
     function closeForm() {
-      document.getElementById("addCouponForm").style.display = "none";
+      document.getElementById("popupForm").style.display = "none";
+      document.getElementById("overlay").style.display = "none";
     }
 
-    // 提交新增優惠券
-    document.getElementById("couponForm").addEventListener("submit", function (event) {
-      event.preventDefault();
+    // 新增優惠券
+    function addCoupon() {
       const member = document.getElementById("member").value;
       const payment = document.getElementById("payment").value;
-      const amount = parseFloat(document.getElementById("amount").value);
+      const amount = document.getElementById("amount").value.split(',');  // 支付金額用逗號分隔
+      const week = getCurrentWeek();
 
-      // 保存到 Firebase
-      const couponRef = db.ref("coupons").push();
-      couponRef.set({
-        member,
-        payment,
-        amount,
-        used: false
+      amount.forEach(amnt => {
+        const newCoupon = {
+          member,
+          payment,
+          amount: amnt,
+          week,
+          used: false
+        };
+
+        couponData.push(newCoupon);
+        saveToFirebase(newCoupon);
       });
 
-      // 關閉表單並更新記錄
+      updateSummary();
+      updateRecords();
       closeForm();
-    });
+    }
 
-    // 更新消費記錄
-    function updateRecords() {
-      const recordTable = document.getElementById("recordBody");
-      recordTable.innerHTML = "";
+    // 儲存到 Firebase
+    function saveToFirebase(coupon) {
+      const couponRef = db.ref("coupons").push();
+      couponRef.set(coupon);
+    }
 
-      couponData.forEach(coupon => {
-        const row = document.createElement("tr");
+    // 更新匯總
+    function updateSummary() {
+      const summaryTable = document.getElementById("summaryBody");
+      summaryTable.innerHTML = "";  // 清空表格
 
-        if (coupon.used) {
-          row.classList.add("underlined");
-        }
-
-        row.innerHTML = `
-          <td>${coupon.member}</td>
-          <td>${coupon.payment}</td>
-          <td>${coupon.amount}元</td>
-          <td>
-            <button onclick="toggleUsed('${coupon.member}', '${coupon.payment}')">標記已使用</button>
-            <button onclick="removeEntry('${coupon.member}', '${coupon.payment}')">刪除</button>
-          </td>
-        `;
-        recordTable.appendChild(row);
+      const members = ["爸爸", "媽媽", "家姐", "昌哥", "妹妹"];
+      members.forEach(member => {
+        let total = 0;
+        couponData.forEach(coupon => {
+          if (coupon.member === member && !coupon.used) {
+            total += parseInt(coupon.amount, 10);
+          }
+        });
+        const row = `<tr>
+          <td>${member}</td>
+          <td>中銀</td> <!-- 這裡可以根據需要改變支付方式 -->
+          <td>${total}</td>
+        </tr>`;
+        summaryTable.innerHTML += row;
       });
     }
 
-    // 更新每人可消費金額總結
-    function updateSummary() {
-      const summaryTable = document.getElementById("summaryBody");
-      summaryTable.innerHTML = "";
+    // 更新記錄
+    function updateRecords() {
+      const recordTable = document.getElementById("recordBody");
+      recordTable.innerHTML = "";  // 清空表格
 
-      let summary = {};
-
-      couponData.forEach(coupon => {
-        if (!summary[coupon.member]) {
-          summary[coupon.member] = {};
-        }
-        if (!summary[coupon.member][coupon.payment]) {
-          summary[coupon.member][coupon.payment] = 0;
-        }
-        summary[coupon.member][coupon.payment] += parseFloat(coupon.amount);
-      });
-
-      Object.keys(summary).forEach(member => {
-        Object.keys(summary[member]).forEach(payment => {
-          const row = document.createElement("tr");
-          const amount = summary[member][payment];
-          row.innerHTML = `<td>${member}</td><td>${payment}</td><td>${amount}元</td>`;
-          summaryTable.appendChild(row);
-        });
+      couponData.forEach((coupon, index) => {
+        const row = `<tr id="coupon-${index}">
+          <td>${coupon.member}</td>
+          <td>${coupon.payment}</td>
+          <td>${coupon.amount}</td>
+          <td>
+            <button onclick="markAsUsed(${index})">使用</button>
+            <button onclick="deleteCoupon(${index})">刪除</button>
+          </td>
+        </tr>`;
+        recordTable.innerHTML += row;
       });
     }
 
     // 標記為已使用
-    function toggleUsed(member, payment) {
-      const coupon = couponData.find(coupon => coupon.member === member && coupon.payment === payment);
-      coupon.used = !coupon.used;
-      updateRecords();
-      updateSummary();
-    }
-
-    // 刪除記錄
-    function removeEntry(member, payment) {
-      couponData = couponData.filter(coupon => !(coupon.member === member && coupon.payment === payment));
+    function markAsUsed(index) {
+      couponData[index].used = true;
       updateSummary();
       updateRecords();
     }
 
-    // 匯出至 Excel
-    function exportToExcel() {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(couponData);
-      XLSX.utils.book_append_sheet(wb, ws, "Coupons");
-      XLSX.writeFile(wb, "Coupons.xlsx");
-    }
-
-    // 初始化 Firebase 讀取資料
-    db.ref("coupons").on("child_added", snapshot => {
-      const coupon = snapshot.val();
-      couponData.push(coupon);
+    // 刪除優惠券
+    function deleteCoupon(index) {
+      couponData.splice(index, 1);
       updateSummary();
       updateRecords();
-    });
+    }
+
+    // 取得當前週次
+    function getCurrentWeek() {
+      const currentDate = new Date();
+      const startDate = new Date(currentDate.getFullYear(), 0, 1);
+      const days = Math.floor((currentDate - startDate) / (24 * 60 * 60 * 1000));
+      return Math.ceil(days / 7);
+    }
+
+    // 篩選週次
+    function filterByWeek() {
+      const selectedWeek = document.getElementById("weekSelect").value;
+      if (selectedWeek) {
+        couponData = couponData.filter(coupon => coupon.week === selectedWeek);
+        updateSummary();
+        updateRecords();
+      }
+    }
+
+    // 初始化頁面
+    window.onload = function () {
+      // 渲染週次選項
+      const weekSelect = document.getElementById("weekSelect");
+      for (let i = 1; i <= 52; i++) {
+        const option = document.createElement("option");
+        option.value = i;
+        option.text = `第 ${i} 週`;
+        weekSelect.appendChild(option);
+      }
+    };
+
   </script>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script>
 </body>
 
 </html>
