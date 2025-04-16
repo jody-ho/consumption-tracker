@@ -1,185 +1,61 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>消費獎賞2025 – 家庭紀錄表</title>
+  <link rel="stylesheet" href="styles.css" />
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <style>
-    body { font-family: sans-serif; font-size: 18px; padding: 20px; }
-    table, th, td { border: 1px solid #aaa; border-collapse: collapse; }
-    th, td { padding: 10px; text-align: center; }
-    table { width: 100%; margin-top: 20px; }
-    .used { text-decoration: line-through; color: gray; }
-    .member-cell { font-weight: bold; }
-    #summary-table td, #summary-table th { padding: 8px; }
-    #summary-table { margin-bottom: 20px; }
-    button { font-size: 18px; padding: 6px 12px; margin: 4px; }
-    select, input[type=number] { font-size: 18px; }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <h1>消費獎賞2025 – 家庭紀錄表</h1>
+  <div class="container">
+    <h1>消費獎賞2025 – 家庭紀錄表</h1>
 
-  <div>
-    <label>家庭成員：</label>
-    <select id="member">
-      <option value="爸爸">爸爸</option>
-      <option value="媽媽">媽媽</option>
-      <option value="家姐">家姐</option>
-      <option value="昌哥">昌哥</option>
-      <option value="妹妹">妹妹</option>
-    </select>
-    <label>支付方式：</label>
-    <select id="method">
-      <option value="中銀">中銀</option>
-      <option value="工商">工商</option>
-      <option value="國際">國際</option>
-      <option value="大豐">大豐</option>
-      <option value="MPay">MPay</option>
-      <option value="UEPay">UEPay</option>
-    </select>
-    <label>金額：</label>
-    <input type="number" id="amount" />
-    <button onclick="addCoupon()">新增</button>
-    <button onclick="exportToExcel()">匯出 Excel</button>
+    <div class="controls">
+      <label for="weekSelector">選擇週次：</label>
+      <select id="weekSelector"></select>
+      <button class="icon-button" onclick="openModal()" title="新增優惠券">➕</button>
+      <button class="icon-button" onclick="exportToExcel()" title="匯出 Excel">📤</button>
+    </div>
+
+    <div id="summaryTableContainer"></div>
+    <div id="tableContainer"></div>
   </div>
 
-  <div id="summary"></div>
-  <div id="coupons"></div>
+  <!-- 新增優惠券 Modal -->
+  <div id="entryModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h2>新增優惠券</h2>
+      <form id="entryForm">
+        <label>家庭成員：</label>
+        <select id="member">
+          <option value="爸爸">爸爸</option>
+          <option value="媽媽">媽媽</option>
+          <option value="家姐">家姐</option>
+          <option value="昌哥">昌哥</option>
+          <option value="妹妹">妹妹</option>
+        </select>
+        <label>支付方式：</label>
+        <select id="method">
+          <option value="中銀">中銀</option>
+          <option value="工商">工商</option>
+          <option value="國際">國際</option>
+          <option value="大豐">大豐</option>
+          <option value="MPay">MPay</option>
+          <option value="UEPay">UEPay</option>
+        </select>
+        <label>金額：</label>
+        <input type="number" id="amount" min="10" step="10" required />
+        <label>一次新增數量（最多3）：</label>
+        <input type="number" id="count" min="1" max="3" value="1" required />
+        <button type="submit">新增</button>
+      </form>
+    </div>
+  </div>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
-      authDomain: "testing-a7aba.firebaseapp.com",
-      projectId: "testing-a7aba",
-      storageBucket: "testing-a7aba.appspot.com",
-      messagingSenderId: "94291975544",
-      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d",
-      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const couponsRef = db.ref('coupons');
-
-    function addCoupon() {
-      const member = document.getElementById('member').value;
-      const method = document.getElementById('method').value;
-      const amount = parseInt(document.getElementById('amount').value);
-      if (!amount || amount <= 0) return;
-
-      const coupon = {
-        member,
-        method,
-        amount,
-        used: false,
-        week: getCurrentWeek()
-      };
-      couponsRef.push(coupon);
-    }
-
-    function getCurrentWeek() {
-      const today = new Date();
-      const start = new Date('2025-03-24');
-      const diff = Math.floor((today - start) / (7 * 24 * 60 * 60 * 1000));
-      return `第${diff + 1}週`;
-    }
-
-    function render(data) {
-      const container = document.getElementById('coupons');
-      container.innerHTML = '';
-      let summary = {};
-      let totalFamilyAmount = 0;
-
-      const table = document.createElement('table');
-      table.innerHTML = '<tr><th>成員</th><th>支付方式</th><th>金額</th><th>狀態</th><th>操作</th></tr>';
-
-      for (let key in data) {
-        const c = data[key];
-        if (!summary[c.member]) summary[c.member] = { total: 0, methods: {} };
-        if (!summary[c.member].methods[c.method]) summary[c.member].methods[c.method] = 0;
-        if (!c.used) {
-          summary[c.member].total += c.amount * 3;
-          summary[c.member].methods[c.method] += c.amount * 3;
-          totalFamilyAmount += c.amount * 3;
-        }
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td style="background:${getColor(c.member)}">${c.member}</td>
-          <td>${c.method}</td>
-          <td>${c.amount}</td>
-          <td>${c.used ? '已使用' : '未使用'}</td>
-          <td>
-            <button onclick="markUsed('${key}', ${!c.used})">標記${c.used ? '未' : '已'}使用</button>
-            <button onclick="removeEntry('${key}')">刪除</button>
-          </td>
-        `;
-        if (c.used) tr.classList.add('used');
-        table.appendChild(tr);
-      }
-
-      container.appendChild(table);
-
-      let summaryHTML = `<h2>每人本週可消費金額</h2>
-        <table id="summary-table">
-          <tr><th>成員</th><th>支付方式</th><th>金額</th><th>合計</th></tr>`;
-
-      for (let m in summary) {
-        for (let method in summary[m].methods) {
-          summaryHTML += `<tr><td>${m}</td><td>${method}</td><td>${summary[m].methods[method]}</td>`;
-          summaryHTML += `<td rowspan="${Object.keys(summary[m].methods).length}" style="font-weight:bold">${summary[m].total}</td></tr>`;
-          break;
-        }
-        const methods = Object.entries(summary[m].methods);
-        for (let i = 1; i < methods.length; i++) {
-          summaryHTML += `<tr><td></td><td>${methods[i][0]}</td><td>${methods[i][1]}</td></tr>`;
-        }
-      }
-      summaryHTML += `<tr><td colspan="3"><strong>整個家庭</strong></td><td style="font-weight:bold">${totalFamilyAmount}</td></tr>`;
-      summaryHTML += '</table>';
-      document.getElementById('summary').innerHTML = summaryHTML;
-    }
-
-    function getColor(member) {
-      const colors = {
-        '爸爸': '#A0C4FF',
-        '媽媽': '#FFC6FF',
-        '家姐': '#Caffbf',
-        '昌哥': '#FFD6A5',
-        '妹妹': '#BDB2FF'
-      };
-      return colors[member] || 'white';
-    }
-
-    function markUsed(key, used) {
-      couponsRef.child(key).update({ used });
-    }
-
-    function removeEntry(key) {
-      couponsRef.child(key).remove();
-    }
-
-    function exportToExcel() {
-      couponsRef.once('value').then(snapshot => {
-        const data = snapshot.val();
-        const list = Object.entries(data || {}).map(([key, val]) => ({
-          家庭成員: val.member,
-          支付方式: val.method,
-          優惠金額: val.amount,
-          狀態: val.used ? '已使用' : '未使用'
-        }));
-        const ws = XLSX.utils.json_to_sheet(list);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "優惠券紀錄");
-        XLSX.writeFile(wb, "優惠券紀錄.xlsx");
-      });
-    }
-
-    couponsRef.on('value', snapshot => render(snapshot.val()));
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
