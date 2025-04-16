@@ -1,132 +1,199 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>消費獎賞2025 家庭紀錄表</title>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
-    <style>
-        /* 你的CSS代碼 */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f7f7f7;
-        }
-
-        h1 {
-            text-align: center;
-        }
-
-        table {
-            width: 100%;
-            margin-top: 20px;
-            border-collapse: collapse;
-        }
-
-        table th, table td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            text-align: center;
-        }
-
-        .btn {
-            background-color: #4CAF50;
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-
-        .btn:disabled {
-            background-color: gray;
-            cursor: not-allowed;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>消費獎賞2025 – 家庭紀錄表</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: "Helvetica Neue", sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background-color: #fdfdfd;
+    }
+    h2 {
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.6rem;
+      text-align: center;
+    }
+    th {
+      background-color: #eee;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      margin-top: 0.5rem;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    .used {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+    .爸爸 { background-color: #b3d9ff; }
+    .媽媽 { background-color: #ffcce5; }
+    .家姐 { background-color: #ccffcc; }
+    .昌哥 { background-color: #ffddb3; }
+    .妹妹 { background-color: #e0ccff; }
+  </style>
 </head>
 <body>
-    <h1>消費獎賞2025 – 家庭紀錄表</h1>
+  <h2>新增優惠券記錄</h2>
+  <form id="add-coupon-form">
+    <label>
+      家庭成員：
+      <select id="member">
+        <option value="爸爸">爸爸</option>
+        <option value="媽媽">媽媽</option>
+        <option value="家姐">家姐</option>
+        <option value="昌哥">昌哥</option>
+        <option value="妹妹">妹妹</option>
+      </select>
+    </label>
+    <br><br>
+    <label>
+      支付方式：
+      <select id="payment-method">
+        <option value="中銀">中銀</option>
+        <option value="工商">工商</option>
+        <option value="國際">國際</option>
+        <option value="大豐">大豐</option>
+        <option value="MPay">MPay</option>
+        <option value="UEPay">UEPay</option>
+      </select>
+    </label>
+    <br><br>
+    <label>
+      優惠券面額（元）：
+      <input type="number" id="coupon-amount" required min="10" step="10" max="200">
+    </label>
+    <br><br>
+    <button class="btn" type="submit">新增</button>
+  </form>
 
-    <table id="coupon-table">
-        <thead>
-            <tr>
-                <th>家庭成員</th>
-                <th>支付方式</th>
-                <th>優惠券額度</th>
-                <th>狀態</th>
-                <th>標記已使用</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- 表格內容會透過 JavaScript 填充 -->
-        </tbody>
-    </table>
+  <h2>優惠券紀錄表</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>成員</th>
+        <th>支付方式</th>
+        <th>面額</th>
+        <th>使用狀態</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="coupon-table-body"></tbody>
+  </table>
 
-    <h3>每週需消費金額：<span id="total-price">0</span> 元</h3>
+  <h3>本週最低需消費金額：<span id="total-spending">0</span> 元</h3>
 
-    <script>
-        // Firebase 配置
-        const firebaseConfig = {
-            apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
-            authDomain: "testing-a7aba.firebaseapp.com",
-            projectId: "testing-a7aba",
-            storageBucket: "testing-a7aba.firebasestorage.app",
-            messagingSenderId: "94291975544",
-            appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
+  <script>
+    // Firebase 設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
+      authDomain: "testing-a7aba.firebaseapp.com",
+      projectId: "testing-a7aba",
+      storageBucket: "testing-a7aba.firebasestorage.app",
+      messagingSenderId: "94291975544",
+      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d",
+      databaseURL: "https://testing-a7aba-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const couponsRef = db.ref('coupons');
+
+    // DOM 元素
+    const form = document.getElementById('add-coupon-form');
+    const tableBody = document.getElementById('coupon-table-body');
+    const totalSpendingEl = document.getElementById('total-spending');
+
+    // 送出表單新增資料
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const member = document.getElementById('member').value;
+      const paymentMethod = document.getElementById('payment-method').value;
+      const coupon = parseInt(document.getElementById('coupon-amount').value);
+      const newCoupon = {
+        member,
+        paymentMethod,
+        coupon,
+        used: false
+      };
+      couponsRef.push(newCoupon);
+      form.reset();
+    });
+
+    // 監聽資料更新，重新渲染表格
+    couponsRef.on('value', snapshot => {
+      const data = snapshot.val() || {};
+      tableBody.innerHTML = '';
+      let total = 0;
+      Object.entries(data).forEach(([id, item]) => {
+        const row = document.createElement('tr');
+        row.className = item.member;
+
+        const memberCell = document.createElement('td');
+        memberCell.textContent = item.member;
+
+        const methodCell = document.createElement('td');
+        methodCell.textContent = item.paymentMethod;
+
+        const amountCell = document.createElement('td');
+        amountCell.textContent = item.coupon;
+
+        const statusCell = document.createElement('td');
+        statusCell.textContent = item.used ? '已使用' : '未使用';
+        if (item.used) row.classList.add('used');
+
+        const actionsCell = document.createElement('td');
+        const toggleBtn = document.createElement('button');
+        toggleBtn.textContent = item.used ? '取消已使用' : '標記已使用';
+        toggleBtn.className = 'btn';
+        toggleBtn.onclick = () => {
+          couponsRef.child(id).update({ used: !item.used });
         };
 
-        // 初始化 Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '刪除';
+        deleteBtn.className = 'btn';
+        deleteBtn.style.backgroundColor = '#d9534f';
+        deleteBtn.style.marginLeft = '5px';
+        deleteBtn.onclick = () => {
+          if (confirm('確定要刪除嗎？')) {
+            couponsRef.child(id).remove();
+          }
+        };
 
-        // 儲存和讀取數據
-        const couponsRef = db.ref('coupons');
+        actionsCell.appendChild(toggleBtn);
+        actionsCell.appendChild(deleteBtn);
 
-        // 設置資料庫監聽
-        couponsRef.on('value', (snapshot) => {
-            const coupons = snapshot.val() || [];
-            renderTable(coupons);
-            updateTotalPrice(coupons);
-        });
+        row.appendChild(memberCell);
+        row.appendChild(methodCell);
+        row.appendChild(amountCell);
+        row.appendChild(statusCell);
+        row.appendChild(actionsCell);
 
-        // 渲染表格
-        function renderTable(coupons) {
-            const tableBody = document.getElementById('coupon-table').getElementsByTagName('tbody')[0];
-            tableBody.innerHTML = '';  // 清空舊的資料
+        tableBody.appendChild(row);
 
-            coupons.forEach((coupon, index) => {
-                const row = document.createElement('tr');
-                row.classList.add('member-row', coupon.member);
-
-                const status = coupon.used ? '已使用' : '未使用';
-
-                row.innerHTML = `
-                    <td>${coupon.member}</td>
-                    <td>${coupon.paymentMethod}</td>
-                    <td>優惠券 ${coupon.coupon} 元</td>
-                    <td>${status}</td>
-                    <td><button class="btn" onclick="markAsUsed(${index})" ${coupon.used ? 'disabled' : ''}>標記已使用</button></td>
-                `;
-                tableBody.appendChild(row);
-            });
+        if (!item.used) {
+          total += item.coupon * 3;
         }
-
-        // 標記已使用
-        function markAsUsed(index) {
-            couponsRef.once('value', (snapshot) => {
-                const coupons = snapshot.val() || [];
-                coupons[index].used = true;
-                couponsRef.set(coupons);  // 更新資料庫
-            });
-        }
-
-        // 計算每週需消費金額
-        function updateTotalPrice(coupons) {
-            const total = coupons.filter(coupon => !coupon.used).reduce((sum, coupon) => sum + coupon.coupon * 3, 0);
-            document.getElementById('total-price').innerText = total;
-        }
-    </script>
+      });
+      totalSpendingEl.textContent = total;
+    });
+  </script>
 </body>
 </html>
