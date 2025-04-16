@@ -2,60 +2,248 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>消費獎賞2025 – 家庭紀錄表</title>
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f4f4f8;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .summary, .entry-form, .week-selector {
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #eee;
+    }
+    .used {
+      text-decoration: line-through;
+      color: gray;
+    }
+    .member-color-爸爸 { background-color: #add8e6; }  /* 淺藍 */
+    .member-color-媽媽 { background-color: #f8c8dc; }  /* 淺粉紅 */
+    .member-color-家姐 { background-color: #c1e1c1; }  /* 淺綠 */
+    .member-color-昌哥 { background-color: #ffd580; }  /* 淺橙 */
+    .member-color-妹妹 { background-color: #d8b7f8; }  /* 淺紫 */
+    button.icon {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    #popup {
+      display: none;
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translate(-50%, -20%);
+      background: white;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      border-radius: 10px;
+      z-index: 1000;
+    }
+    #overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+    select, input[type="number"] {
+      font-size: 16px;
+      padding: 5px;
+      margin: 5px;
+    }
+    .btn-primary {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>消費獎賞2025 – 家庭紀錄表</h1>
+  <h1>消費獎賞2025 – 家庭紀錄表</h1>
 
-    <div class="controls">
-      <label for="weekSelector">選擇週次：</label>
-      <select id="weekSelector"></select>
-      <button class="icon-button" onclick="openModal()" title="新增優惠券">➕</button>
-      <button class="icon-button" onclick="exportToExcel()" title="匯出 Excel">📤</button>
-    </div>
-
-    <div id="summaryTableContainer"></div>
-    <div id="tableContainer"></div>
+  <div class="week-selector">
+    <label for="weekSelect">選擇週次：</label>
+    <select id="weekSelect"></select>
   </div>
 
-  <!-- 新增優惠券 Modal -->
-  <div id="entryModal" class="modal hidden">
-    <div class="modal-content">
-      <span class="close" onclick="closeModal()">&times;</span>
-      <h2>新增優惠券</h2>
-      <form id="entryForm">
-        <label>家庭成員：</label>
+  <div class="summary" id="summary"></div>
+
+  <button class="btn-primary" onclick="showPopup()">➕ 新增優惠券</button>
+
+  <div id="overlay" onclick="closePopup()"></div>
+  <div id="popup">
+    <h3>新增優惠券</h3>
+    <form id="entryForm">
+      <label>家庭成員：
         <select id="member">
-          <option value="爸爸">爸爸</option>
-          <option value="媽媽">媽媽</option>
-          <option value="家姐">家姐</option>
-          <option value="昌哥">昌哥</option>
-          <option value="妹妹">妹妹</option>
+          <option>爸爸</option>
+          <option>媽媽</option>
+          <option>家姐</option>
+          <option>昌哥</option>
+          <option>妹妹</option>
         </select>
-        <label>支付方式：</label>
-        <select id="method">
-          <option value="中銀">中銀</option>
-          <option value="工商">工商</option>
-          <option value="國際">國際</option>
-          <option value="大豐">大豐</option>
-          <option value="MPay">MPay</option>
-          <option value="UEPay">UEPay</option>
+      </label><br />
+      <label>支付方式：
+        <select id="payment">
+          <option>中銀</option>
+          <option>工商</option>
+          <option>國際</option>
+          <option>大豐</option>
+          <option>MPay</option>
+          <option>UEPay</option>
         </select>
-        <label>金額：</label>
-        <input type="number" id="amount" min="10" step="10" required />
-        <label>一次新增數量（最多3）：</label>
-        <input type="number" id="count" min="1" max="3" value="1" required />
-        <button type="submit">新增</button>
-      </form>
-    </div>
+      </label><br />
+      <label>金額（最多三筆，以逗號分隔）：<br />
+        <input type="text" id="amounts" placeholder="例如：10,20,50" />
+      </label><br /><br />
+      <button type="button" class="btn-primary" onclick="addEntries()">確認新增</button>
+    </form>
   </div>
 
-  <script src="script.js"></script>
+  <table>
+    <thead>
+      <tr>
+        <th>家庭成員</th>
+        <th>支付方式</th>
+        <th>金額</th>
+        <th>已使用</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="entriesTable"></tbody>
+  </table>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
+      authDomain: "testing-a7aba.firebaseapp.com",
+      projectId: "testing-a7aba",
+      storageBucket: "testing-a7aba.appspot.com",
+      messagingSenderId: "94291975544",
+      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d",
+      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const weekSelect = document.getElementById('weekSelect');
+    const table = document.getElementById('entriesTable');
+    const summaryDiv = document.getElementById('summary');
+
+    const today = new Date();
+    const startDate = new Date("2025-03-24");
+    const currentWeek = Math.ceil((today - startDate) / (7 * 24 * 60 * 60 * 1000)) + 1;
+
+    for (let i = 1; i <= 11; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `第 ${i} 週`;
+      if (i === currentWeek) opt.selected = true;
+      weekSelect.appendChild(opt);
+    }
+
+    weekSelect.addEventListener('change', renderData);
+
+    function showPopup() {
+      document.getElementById('popup').style.display = 'block';
+      document.getElementById('overlay').style.display = 'block';
+    }
+
+    function closePopup() {
+      document.getElementById('popup').style.display = 'none';
+      document.getElementById('overlay').style.display = 'none';
+    }
+
+    function addEntries() {
+      const member = document.getElementById('member').value;
+      const payment = document.getElementById('payment').value;
+      const amounts = document.getElementById('amounts').value.split(',').map(x => parseInt(x.trim())).filter(n => !isNaN(n));
+      const week = weekSelect.value;
+      amounts.forEach(amount => {
+        const newRef = db.ref(`week${week}`).push();
+        newRef.set({ member, payment, amount, used: false });
+      });
+      closePopup();
+    }
+
+    function markUsed(key) {
+      const week = weekSelect.value;
+      db.ref(`week${week}/${key}/used`).set(true);
+    }
+
+    function removeEntry(key) {
+      const week = weekSelect.value;
+      db.ref(`week${week}/${key}`).remove();
+    }
+
+    function renderData() {
+      const week = weekSelect.value;
+      db.ref(`week${week}`).on('value', snapshot => {
+        const data = snapshot.val() || {};
+        table.innerHTML = '';
+
+        const summary = {};
+        let familyTotal = 0;
+
+        Object.entries(data).forEach(([key, entry]) => {
+          const row = document.createElement('tr');
+          row.className = `member-color-${entry.member}`;
+          row.innerHTML = `
+            <td>${entry.member}</td>
+            <td>${entry.payment}</td>
+            <td>${entry.amount}</td>
+            <td>${entry.used ? '✔️' : ''}</td>
+            <td>
+              <button class="icon" onclick="markUsed('${key}')">✅</button>
+              <button class="icon" onclick="removeEntry('${key}')">🗑️</button>
+            </td>
+          `;
+          table.appendChild(row);
+
+          const multiplier = entry.used ? 0 : 3;
+          if (!summary[entry.member]) summary[entry.member] = { total: 0, methods: {} };
+          summary[entry.member].total += entry.amount * multiplier;
+          summary[entry.member].methods[entry.payment] = (summary[entry.member].methods[entry.payment] || 0) + entry.amount * multiplier;
+          familyTotal += entry.amount * multiplier;
+        });
+
+        summaryDiv.innerHTML = `<h3>整體可消費金額：$${familyTotal}</h3>` +
+          Object.entries(summary).map(([member, info]) => {
+            return `
+              <div>
+                <strong>${member}</strong>：總計 $${info.total}<br/>
+                ${Object.entries(info.methods).map(([method, amt]) => `${method}：$${amt}`).join(', ')}
+              </div><br/>
+            `;
+          }).join('');
+      });
+    }
+
+    renderData();
+  </script>
 </body>
 </html>
