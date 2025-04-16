@@ -100,6 +100,52 @@
       background-color: rgba(0, 0, 0, 0.4);
       z-index: 999;
     }
+
+    .icon-button {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      color: #45a049;
+    }
+
+    .header-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .header-actions .button-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .select-wrapper {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    label {
+      font-size: 16px;
+      color: #333;
+    }
+
+    select {
+      padding: 8px;
+      font-size: 16px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+
+    .underlined {
+      text-decoration: line-through;
+    }
   </style>
 </head>
 
@@ -108,8 +154,24 @@
   <div class="container">
     <h1>消費獎賞 2025 - 家庭紀錄表</h1>
 
-    <!-- 匯出按鈕 -->
-    <button onclick="exportToExcel()">匯出到 Excel</button>
+    <!-- 上方操作區域 -->
+    <div class="header-actions">
+      <div class="button-group">
+        <!-- 新增優惠券按鈕 -->
+        <button onclick="openForm()">新增優惠券</button>
+
+        <!-- 匯出到 Excel 按鈕（圖標） -->
+        <button class="icon-button" onclick="exportToExcel()">📥</button>
+      </div>
+
+      <!-- 日期範圍選擇 -->
+      <div class="select-wrapper">
+        <label for="weekSelect">選擇日期範圍：</label>
+        <select id="weekSelect" onchange="filterByWeek()">
+          <option value="">--選擇週次--</option>
+        </select>
+      </div>
+    </div>
 
     <!-- 匯總 -->
     <h2>每週消費金額匯總</h2>
@@ -129,20 +191,15 @@
     <table id="recordTable">
       <thead>
         <tr>
-          <th>日期範圍</th>
           <th>家庭成員</th>
           <th>支付方式</th>
           <th>金額</th>
-          <th>週次</th>
-          <th>已使用</th>
           <th>操作</th>
         </tr>
       </thead>
       <tbody id="recordBody"></tbody>
     </table>
 
-    <!-- 新增優惠券按鈕 -->
-    <button onclick="openForm()">新增優惠券</button>
   </div>
 
   <!-- 彈出式新增表單 -->
@@ -166,16 +223,8 @@
       <option value="MPay">MPay</option>
       <option value="UEPay">UEPay</option>
     </select>
-    <label for="amount">金額：</label>
-    <select id="amount">
-      <option value="10">10元</option>
-      <option value="20">20元</option>
-      <option value="50">50元</option>
-      <option value="100">100元</option>
-      <option value="200">200元</option>
-    </select>
-    <label for="week">週次：</label>
-    <input type="text" id="week" placeholder="例如：2025/04/14-2025/04/20">
+    <label for="amount">金額（用逗號分隔）：</label>
+    <input type="text" id="amount" placeholder="例如：10,20,50">
     <button onclick="addCoupon()">新增</button>
     <button class="cancel" onclick="closeForm()">取消</button>
   </div>
@@ -198,6 +247,7 @@
     const db = firebase.database();
 
     let couponData = [];
+    let weekData = [];
 
     // 開啟表單
     function openForm() {
@@ -215,20 +265,24 @@
     function addCoupon() {
       const member = document.getElementById("member").value;
       const payment = document.getElementById("payment").value;
-      const amount = document.getElementById("amount").value;
-      const week = document.getElementById("week").value;
+      const amount = document.getElementById("amount").value.split(',');  // 支付金額用逗號分隔
+      const week = getCurrentWeek();
 
-      const newCoupon = {
-        member,
-        payment,
-        amount,
-        week,
-        used: false
-      };
+      amount.forEach(amnt => {
+        const newCoupon = {
+          member,
+          payment,
+          amount: amnt,
+          week,
+          used: false
+        };
 
-      couponData.push(newCoupon);
-      saveToFirebase(newCoupon);
+        couponData.push(newCoupon);
+        saveToFirebase(newCoupon);
+      });
+
       updateSummary();
+      updateRecords();
       closeForm();
     }
 
@@ -252,7 +306,7 @@
         if (!summary[coupon.member][coupon.payment]) {
           summary[coupon.member][coupon.payment] = 0;
         }
-        summary[coupon.member][coupon.payment] += parseInt(coupon.amount);
+        summary[coupon.member][coupon.payment] += parseFloat(coupon.amount);
       });
 
       Object.keys(summary).forEach(member => {
@@ -263,6 +317,70 @@
           summaryTable.appendChild(row);
         });
       });
+    }
+
+    // 更新記錄
+    function updateRecords() {
+      const recordTable = document.getElementById("recordBody");
+      recordTable.innerHTML = "";
+
+      couponData.forEach(coupon => {
+        const row = document.createElement("tr");
+
+        if (coupon.used) {
+          row.classList.add("underlined");
+        }
+
+        row.innerHTML = `
+          <td>${coupon.member}</td>
+          <td>${coupon.payment}</td>
+          <td>${coupon.amount}元</td>
+          <td>
+            <button onclick="toggleUsed('${coupon.member}', '${coupon.payment}')">標記已使用</button>
+            <button onclick="removeEntry('${coupon.member}', '${coupon.payment}')">刪除</button>
+          </td>
+        `;
+        recordTable.appendChild(row);
+      });
+    }
+
+    // 標記為已使用
+    function toggleUsed(member, payment) {
+      const coupon = couponData.find(coupon => coupon.member === member && coupon.payment === payment);
+      coupon.used = !coupon.used;
+      updateRecords();
+    }
+
+    // 刪除記錄
+    function removeEntry(member, payment) {
+      couponData = couponData.filter(coupon => !(coupon.member === member && coupon.payment === payment));
+      updateSummary();
+      updateRecords();
+    }
+
+    // 獲取當前週次
+    function getCurrentWeek() {
+      const now = new Date();
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const diff = now - startOfYear;
+      const oneDay = 24 * 60 * 60 * 1000;
+      const weekNumber = Math.ceil(diff / oneDay / 7);
+      const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() - 1));
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+      const startDate = formatDate(startOfWeek);
+      const endDate = formatDate(endOfWeek);
+
+      return `${startDate} - ${endDate}`;
+    }
+
+    // 格式化日期
+    function formatDate(date) {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}/${month}/${day}`;
     }
 
     // 匯出至 Excel
@@ -278,6 +396,7 @@
       const coupon = snapshot.val();
       couponData.push(coupon);
       updateSummary();
+      updateRecords();
     });
   </script>
 
