@@ -138,7 +138,7 @@
         <option>3</option>
       </select>
       <br>
-      <button onclick="addEntries()">確定新增</button>
+      <button id="addBtn">確定新增</button>
     </div>
   </div>
 
@@ -175,6 +175,7 @@
     const db = getDatabase(app);
     const couponsRef = ref(db, 'coupons');
 
+    // 用於新增資料的函式
     function addEntries() {
       const member = document.getElementById('member').value;
       const method = document.getElementById('method').value;
@@ -262,6 +263,9 @@
     function closeModal() {
       modal.style.display = "none";
     }
+
+    // 將新增優惠券按鈕的事件綁定到 addEntries 函式
+    document.getElementById("addBtn").onclick = addEntries;
   </script>
 </body>
 </html>
