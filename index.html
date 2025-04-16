@@ -4,121 +4,90 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>消費獎賞2025 – 家庭紀錄表</title>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <style>
     body {
-      font-family: "Microsoft JhengHei", sans-serif;
-      font-size: 20px;
-      background-color: #f4f7f9;
-      padding: 2rem;
-      max-width: 900px;
-      margin: auto;
+      font-family: Arial, sans-serif;
+      background: #f6f8fa;
+      padding: 1rem;
+      font-size: 18px;
     }
-    h2, h3 {
-      color: #333;
+    h1 {
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 20px;
     }
-    label, select, input {
-      display: block;
+    form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
       margin-bottom: 1rem;
     }
-    input, select {
+    select, input, button {
       font-size: 18px;
-      padding: 0.5rem;
-      width: 100%;
-      max-width: 300px;
+      padding: 6px;
     }
-    .btn {
-      font-size: 18px;
-      padding: 0.7rem 1.2rem;
-      margin-top: 0.5rem;
-      cursor: pointer;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 6px;
-    }
-    .btn-danger {
-      background-color: #d9534f;
-      margin-left: 0.5rem;
+    .coupon {
+      padding: 10px;
+      border-radius: 10px;
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .used {
       text-decoration: line-through;
       opacity: 0.5;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
+    .爸爸 { background-color: #cce5ff; }
+    .媽媽 { background-color: #fcd6e6; }
+    .家姐 { background-color: #d0f0c0; }
+    .昌哥 { background-color: #ffe4b3; }
+    .妹妹 { background-color: #e6ccff; }
+    .week-group {
+      margin-bottom: 20px;
     }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 1rem;
-      text-align: center;
-      font-size: 18px;
+    .week-title {
+      font-weight: bold;
+      margin-top: 15px;
+      border-bottom: 1px solid #ccc;
+      font-size: 20px;
     }
-    th {
-      background-color: #e0e0e0;
-    }
-    .爸爸 { background-color: #b3d9ff; }
-    .媽媽 { background-color: #ffcce5; }
-    .家姐 { background-color: #ccffcc; }
-    .昌哥 { background-color: #ffddb3; }
-    .妹妹 { background-color: #e0ccff; }
   </style>
 </head>
 <body>
-  <h2>消費獎賞2025 – 家庭紀錄表</h2>
 
-  <label for="week-select">選擇週次：</label>
-  <select id="week-select"></select>
+  <h1>消費獎賞2025 – 家庭紀錄表</h1>
 
-  <form id="add-coupon-form">
-    <label>家庭成員：
-      <select id="member">
-        <option value="爸爸">爸爸</option>
-        <option value="媽媽">媽媽</option>
-        <option value="家姐">家姐</option>
-        <option value="昌哥">昌哥</option>
-        <option value="妹妹">妹妹</option>
-      </select>
-    </label>
-
-    <label>支付方式：
-      <select id="payment-method">
-        <option value="中銀">中銀</option>
-        <option value="工商">工商</option>
-        <option value="國際">國際</option>
-        <option value="大豐">大豐</option>
-        <option value="MPay">MPay</option>
-        <option value="UEPay">UEPay</option>
-      </select>
-    </label>
-
-    <label>優惠券面額（元）：
-      <input type="number" id="coupon-amount" required min="10" step="10" max="200">
-    </label>
-
-    <button class="btn" type="submit">新增</button>
+  <form id="couponForm">
+    <select id="member" required>
+      <option value="">選擇家庭成員</option>
+      <option value="爸爸">爸爸</option>
+      <option value="媽媽">媽媽</option>
+      <option value="家姐">家姐</option>
+      <option value="昌哥">昌哥</option>
+      <option value="妹妹">妹妹</option>
+    </select>
+    <select id="method" required>
+      <option value="">支付方式</option>
+      <option>中銀</option>
+      <option>工商</option>
+      <option>國際</option>
+      <option>大豐</option>
+      <option>MPay</option>
+      <option>UEPay</option>
+    </select>
+    <input type="number" id="amount" placeholder="優惠額（例如10）" required />
+    <button type="submit">新增</button>
   </form>
 
-  <h3>優惠券紀錄</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>成員</th>
-        <th>支付方式</th>
-        <th>面額</th>
-        <th>使用狀態</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="coupon-table-body"></tbody>
-  </table>
-
-  <h3>本週最低需消費金額：<span id="total-spending">0</span> 元</h3>
+  <div id="couponList"></div>
 
   <script>
+    // Firebase 設定
     const firebaseConfig = {
       apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
       authDomain: "testing-a7aba.firebaseapp.com",
@@ -126,115 +95,88 @@
       storageBucket: "testing-a7aba.firebasestorage.app",
       messagingSenderId: "94291975544",
       appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d",
-      databaseURL: "https://testing-a7aba-default-rtdb.asia-southeast1.firebasedatabase.app"
+      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/"
     };
+
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const form = document.getElementById('add-coupon-form');
-    const tableBody = document.getElementById('coupon-table-body');
-    const totalSpendingEl = document.getElementById('total-spending');
-    const weekSelect = document.getElementById('week-select');
+    const form = document.getElementById('couponForm');
+    const couponList = document.getElementById('couponList');
 
-    const startDate = new Date('2025-03-24');
-
-    function getCurrentWeek() {
-      const today = new Date();
-      const diffTime = today - startDate;
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      return Math.floor(diffDays / 7) + 1;
+    function getWeek(date) {
+      const first = new Date(date.getFullYear(), 0, 1);
+      const days = Math.floor((date - first) / (24 * 60 * 60 * 1000));
+      return Math.ceil((days + first.getDay() + 1) / 7);
     }
-
-    // 初始化週次選單
-    const maxWeeks = 10;
-    for (let i = 1; i <= maxWeeks; i++) {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = `第 ${i} 週`;
-      weekSelect.appendChild(opt);
-    }
-    const currentWeek = getCurrentWeek();
-    weekSelect.value = currentWeek;
-
-    function getWeekRef(weekNum) {
-      return db.ref(`weeks/week${weekNum}`);
-    }
-
-    function renderTable(weekNum) {
-      const weekRef = getWeekRef(weekNum);
-      weekRef.off();
-      weekRef.on('value', snapshot => {
-        const data = snapshot.val() || {};
-        tableBody.innerHTML = '';
-        let total = 0;
-
-        Object.entries(data).forEach(([id, item]) => {
-          const row = document.createElement('tr');
-          row.className = item.member;
-
-          const memberCell = document.createElement('td');
-          memberCell.textContent = item.member;
-
-          const methodCell = document.createElement('td');
-          methodCell.textContent = item.paymentMethod;
-
-          const amountCell = document.createElement('td');
-          amountCell.textContent = item.coupon;
-
-          const statusCell = document.createElement('td');
-          statusCell.textContent = item.used ? '已使用' : '未使用';
-          if (item.used) row.classList.add('used');
-
-          const actionsCell = document.createElement('td');
-
-          const toggleBtn = document.createElement('button');
-          toggleBtn.textContent = item.used ? '取消已使用' : '標記已使用';
-          toggleBtn.className = 'btn';
-          toggleBtn.onclick = () => {
-            weekRef.child(id).update({ used: !item.used });
-          };
-
-          const deleteBtn = document.createElement('button');
-          deleteBtn.textContent = '刪除';
-          deleteBtn.className = 'btn btn-danger';
-          deleteBtn.onclick = () => {
-            if (confirm('確定要刪除嗎？')) {
-              weekRef.child(id).remove();
-            }
-          };
-
-          actionsCell.appendChild(toggleBtn);
-          actionsCell.appendChild(deleteBtn);
-
-          row.appendChild(memberCell);
-          row.appendChild(methodCell);
-          row.appendChild(amountCell);
-          row.appendChild(statusCell);
-          row.appendChild(actionsCell);
-          tableBody.appendChild(row);
-
-          if (!item.used) total += item.coupon * 3;
-        });
-
-        totalSpendingEl.textContent = total;
-      });
-    }
-
-    weekSelect.addEventListener('change', () => {
-      renderTable(weekSelect.value);
-    });
 
     form.addEventListener('submit', e => {
       e.preventDefault();
       const member = document.getElementById('member').value;
-      const method = document.getElementById('payment-method').value;
-      const amount = parseInt(document.getElementById('coupon-amount').value);
-      const weekRef = getWeekRef(weekSelect.value);
-      weekRef.push({ member, paymentMethod: method, coupon: amount, used: false });
+      const method = document.getElementById('method').value;
+      const amount = parseInt(document.getElementById('amount').value);
+      const date = new Date().toISOString().split('T')[0];
+      const week = getWeek(new Date());
+
+      const newCoupon = {
+        member,
+        method,
+        amount,
+        date,
+        used: false,
+        week
+      };
+
+      db.ref('coupons').push(newCoupon);
       form.reset();
     });
 
-    renderTable(currentWeek);
+    db.ref('coupons').on('value', snapshot => {
+      const data = snapshot.val();
+      couponList.innerHTML = '';
+      if (!data) return;
+
+      const grouped = {};
+      for (const id in data) {
+        const item = data[id];
+        if (!grouped[item.week]) grouped[item.week] = [];
+        grouped[item.week].push({ id, ...item });
+      }
+
+      Object.keys(grouped).sort((a, b) => b - a).forEach(week => {
+        const weekGroup = document.createElement('div');
+        weekGroup.className = 'week-group';
+        const weekTitle = document.createElement('div');
+        weekTitle.className = 'week-title';
+        weekTitle.textContent = `第 ${week} 週`;
+        weekGroup.appendChild(weekTitle);
+
+        grouped[week].forEach(item => {
+          const div = document.createElement('div');
+          div.className = `coupon ${item.member} ${item.used ? 'used' : ''}`;
+          div.innerHTML = `
+            ${item.date} – ${item.member} 用 ${item.method} 抽到 ${item.amount}元優惠
+            <span>
+              <button onclick="toggleUsed('${item.id}', ${item.used})">✔️</button>
+              <button onclick="removeCoupon('${item.id}')">🗑️</button>
+            </span>
+          `;
+          weekGroup.appendChild(div);
+        });
+
+        couponList.appendChild(weekGroup);
+      });
+    });
+
+    function toggleUsed(id, current) {
+      db.ref('coupons/' + id).update({ used: !current });
+    }
+
+    function removeCoupon(id) {
+      if (confirm('確定要刪除這張優惠券嗎？')) {
+        db.ref('coupons/' + id).remove();
+      }
+    }
   </script>
 </body>
 </html>
