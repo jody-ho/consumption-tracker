@@ -2,180 +2,265 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>消費獎賞2025 – 家庭紀錄表</title>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f6f8fa;
+      font-family: sans-serif;
       padding: 1rem;
-      font-size: 18px;
+      background: #f5f5f5;
+      color: #333;
     }
     h1 {
       text-align: center;
-      font-size: 28px;
-      margin-bottom: 20px;
     }
-    form {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
+    .form {
       margin-bottom: 1rem;
     }
-    select, input, button {
-      font-size: 18px;
-      padding: 6px;
+    label, select, input {
+      margin: 0.25rem;
     }
-    .coupon {
-      padding: 10px;
-      border-radius: 10px;
-      margin: 8px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      text-align: center;
     }
     .used {
       text-decoration: line-through;
-      opacity: 0.5;
+      color: gray;
     }
-    .爸爸 { background-color: #cce5ff; }
-    .媽媽 { background-color: #fcd6e6; }
-    .家姐 { background-color: #d0f0c0; }
-    .昌哥 { background-color: #ffe4b3; }
-    .妹妹 { background-color: #e6ccff; }
-    .week-group {
-      margin-bottom: 20px;
+    .爸爸 { background-color: rgba(0, 120, 255, 0.1); }
+    .媽媽 { background-color: rgba(255, 105, 180, 0.1); }
+    .家姐 { background-color: rgba(0, 128, 0, 0.1); }
+    .昌哥 { background-color: rgba(255, 165, 0, 0.1); }
+    .妹妹 { background-color: rgba(128, 0, 128, 0.1); }
+    .summary {
+      margin-top: 1rem;
+      padding: 0.5rem;
+      background: #fff;
+      border: 1px solid #ccc;
     }
-    .week-title {
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgb(0, 0, 0);
+      background-color: rgba(0, 0, 0, 0.4);
+      padding-top: 60px;
+    }
+    .modal-content {
+      background-color: #fefefe;
+      margin: 5% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 80%;
+      max-width: 500px;
+    }
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
       font-weight: bold;
-      margin-top: 15px;
-      border-bottom: 1px solid #ccc;
-      font-size: 20px;
+    }
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+    button:hover {
+      background-color: #45a049;
     }
   </style>
 </head>
 <body>
+  <h1>🏠 消費獎賞2025 – 家庭紀錄表</h1>
 
-  <h1>消費獎賞2025 – 家庭紀錄表</h1>
+  <button id="myBtn">新增優惠券</button>
 
-  <form id="couponForm">
-    <select id="member" required>
-      <option value="">選擇家庭成員</option>
-      <option value="爸爸">爸爸</option>
-      <option value="媽媽">媽媽</option>
-      <option value="家姐">家姐</option>
-      <option value="昌哥">昌哥</option>
-      <option value="妹妹">妹妹</option>
-    </select>
-    <select id="method" required>
-      <option value="">支付方式</option>
-      <option>中銀</option>
-      <option>工商</option>
-      <option>國際</option>
-      <option>大豐</option>
-      <option>MPay</option>
-      <option>UEPay</option>
-    </select>
-    <input type="number" id="amount" placeholder="優惠額（例如10）" required />
-    <button type="submit">新增</button>
-  </form>
+  <!-- Modal -->
+  <div id="myModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>新增優惠券</h2>
+      <label>家庭成員：</label>
+      <select id="member">
+        <option>爸爸</option>
+        <option>媽媽</option>
+        <option>家姐</option>
+        <option>昌哥</option>
+        <option>妹妹</option>
+      </select>
+      <br>
+      <label>支付方式：</label>
+      <select id="method">
+        <option>中銀</option>
+        <option>工商</option>
+        <option>國際</option>
+        <option>大豐</option>
+        <option>MPay</option>
+        <option>UEPay</option>
+      </select>
+      <br>
+      <label>金額：</label>
+      <select id="amount">
+        <option>10</option>
+        <option>20</option>
+        <option>50</option>
+        <option>100</option>
+        <option>200</option>
+      </select>
+      <br>
+      <label>張數：</label>
+      <select id="count">
+        <option>1</option>
+        <option>2</option>
+        <option>3</option>
+      </select>
+      <br>
+      <button onclick="addEntries()">確定新增</button>
+    </div>
+  </div>
 
-  <div id="couponList"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>家庭成員</th>
+        <th>支付方式</th>
+        <th>金額</th>
+        <th>狀態</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="couponTable"></tbody>
+  </table>
 
-  <script>
-    // Firebase 設定
+  <div class="summary" id="summary"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
     const firebaseConfig = {
       apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
       authDomain: "testing-a7aba.firebaseapp.com",
+      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/",
       projectId: "testing-a7aba",
-      storageBucket: "testing-a7aba.firebasestorage.app",
+      storageBucket: "testing-a7aba.appspot.com",
       messagingSenderId: "94291975544",
-      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d",
-      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/"
+      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
     };
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const couponsRef = ref(db, 'coupons');
 
-    const form = document.getElementById('couponForm');
-    const couponList = document.getElementById('couponList');
-
-    function getWeek(date) {
-      const first = new Date(date.getFullYear(), 0, 1);
-      const days = Math.floor((date - first) / (24 * 60 * 60 * 1000));
-      return Math.ceil((days + first.getDay() + 1) / 7);
-    }
-
-    form.addEventListener('submit', e => {
-      e.preventDefault();
+    function addEntries() {
       const member = document.getElementById('member').value;
       const method = document.getElementById('method').value;
       const amount = parseInt(document.getElementById('amount').value);
-      const date = new Date().toISOString().split('T')[0];
-      const week = getWeek(new Date());
-
-      const newCoupon = {
-        member,
-        method,
-        amount,
-        date,
-        used: false,
-        week
-      };
-
-      db.ref('coupons').push(newCoupon);
-      form.reset();
-    });
-
-    db.ref('coupons').on('value', snapshot => {
-      const data = snapshot.val();
-      couponList.innerHTML = '';
-      if (!data) return;
-
-      const grouped = {};
-      for (const id in data) {
-        const item = data[id];
-        if (!grouped[item.week]) grouped[item.week] = [];
-        grouped[item.week].push({ id, ...item });
+      const count = parseInt(document.getElementById('count').value);
+      const week = getCurrentWeek();
+      for (let i = 0; i < count; i++) {
+        push(couponsRef, { member, method, amount, used: false, week });
       }
-
-      Object.keys(grouped).sort((a, b) => b - a).forEach(week => {
-        const weekGroup = document.createElement('div');
-        weekGroup.className = 'week-group';
-        const weekTitle = document.createElement('div');
-        weekTitle.className = 'week-title';
-        weekTitle.textContent = `第 ${week} 週`;
-        weekGroup.appendChild(weekTitle);
-
-        grouped[week].forEach(item => {
-          const div = document.createElement('div');
-          div.className = `coupon ${item.member} ${item.used ? 'used' : ''}`;
-          div.innerHTML = `
-            ${item.date} – ${item.member} 用 ${item.method} 抽到 ${item.amount}元優惠
-            <span>
-              <button onclick="toggleUsed('${item.id}', ${item.used})">✔️</button>
-              <button onclick="removeCoupon('${item.id}')">🗑️</button>
-            </span>
-          `;
-          weekGroup.appendChild(div);
-        });
-
-        couponList.appendChild(weekGroup);
-      });
-    });
-
-    function toggleUsed(id, current) {
-      db.ref('coupons/' + id).update({ used: !current });
+      closeModal(); // 關閉 Modal 視窗
     }
 
-    function removeCoupon(id) {
-      if (confirm('確定要刪除這張優惠券嗎？')) {
-        db.ref('coupons/' + id).remove();
+    function getCurrentWeek() {
+      const today = new Date();
+      const onejan = new Date(today.getFullYear(), 0, 1);
+      return Math.ceil((((today - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+    }
+
+    function render(coupons) {
+      const tbody = document.getElementById('couponTable');
+      tbody.innerHTML = '';
+      const summary = {};
+
+      Object.entries(coupons).forEach(([key, c]) => {
+        const row = document.createElement('tr');
+        row.className = c.member;
+        row.innerHTML = `
+          <td>${c.member}</td>
+          <td>${c.method}</td>
+          <td>${c.amount}</td>
+          <td class="${c.used ? 'used' : ''}">${c.used ? '已使用' : '未使用'}</td>
+          <td>
+            <button onclick="markUsed('${key}', ${!c.used})">✔️</button>
+            <button onclick="removeEntry('${key}')">🗑️</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+
+        if (!summary[c.member]) {
+          summary[c.member] = { need: 0, used: 0 };
+        }
+        if (!c.used) summary[c.member].need += c.amount * 3;
+        else summary[c.member].used += c.amount * 3;
+      });
+
+      const summaryDiv = document.getElementById('summary');
+      summaryDiv.innerHTML = '<strong>每人本週需消費金額與已使用金額：</strong><br>';
+      Object.entries(summary).forEach(([member, s]) => {
+        summaryDiv.innerHTML += `${member}：需消費 $${s.need}｜已消費 $${s.used}<br>`;
+      });
+    }
+
+    window.markUsed = (id, newStatus) => {
+      update(ref(db, `coupons/${id}`), { used: newStatus });
+    };
+
+    window.removeEntry = (id) => {
+      remove(ref(db, `coupons/${id}`));
+    };
+
+    onValue(couponsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      render(data);
+    });
+
+    // Modal 控制
+    const modal = document.getElementById("myModal");
+    const btn = document.getElementById("myBtn");
+    const span = document.getElementsByClassName("close")[0];
+
+    btn.onclick = () => {
+      modal.style.display = "block";
+    };
+
+    span.onclick = () => {
+      modal.style.display = "none";
+    };
+
+    window.onclick = (event) => {
+      if (event.target === modal) {
+        modal.style.display = "none";
       }
+    };
+
+    function closeModal() {
+      modal.style.display = "none";
     }
   </script>
 </body>
