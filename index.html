@@ -1,202 +1,287 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>消費獎賞2025 – 家庭紀錄</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>消費獎賞 2025 - 家庭紀錄表</title>
   <style>
     body {
-      font-family: "Segoe UI", sans-serif;
+      font-family: Arial, sans-serif;
+      background-color: #f7f7f7;
       padding: 20px;
-      background: #f9f9f9;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
       color: #333;
     }
-    h1 {
-      font-size: 1.8em;
-      margin-bottom: 10px;
-    }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 20px 0;
-      font-size: 1em;
+      margin-top: 20px;
     }
-    th, td {
-      padding: 12px 8px;
+
+    table,
+    th,
+    td {
       border: 1px solid #ccc;
+    }
+
+    th,
+    td {
+      padding: 8px;
       text-align: center;
     }
-    tr.used {
-      text-decoration: line-through;
-      opacity: 0.5;
+
+    th {
+      background-color: #f2f2f2;
     }
+
     button {
-      cursor: pointer;
-      padding: 6px 12px;
-      font-size: 1em;
-    }
-    .btn-icon {
-      background: none;
+      background-color: #4CAF50;
+      color: white;
       border: none;
-      font-size: 1.2em;
-      color: #666;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 16px;
     }
-    .btn-icon:hover {
-      color: #000;
+
+    button:hover {
+      background-color: #45a049;
     }
-    #entryForm {
+
+    .form-popup {
       display: none;
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: #fff;
+      background-color: white;
       padding: 20px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
-      border-radius: 8px;
+      border: 1px solid #ccc;
       z-index: 1000;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
-    #overlay {
+
+    .form-popup input,
+    .form-popup select {
+      width: 100%;
+      padding: 8px;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+
+    .form-popup button {
+      background-color: #008CBA;
+    }
+
+    .form-popup button.cancel {
+      background-color: red;
+    }
+
+    .form-popup button:hover {
+      background-color: #45a049;
+    }
+
+    .overlay {
       display: none;
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.4);
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.4);
       z-index: 999;
-    }
-    select, input[type="number"] {
-      font-size: 1.1em;
-      padding: 6px;
-      margin: 5px;
-    }
-    #summaryTable th, #summaryTable td {
-      background: #eef;
-    }
-    .export-button {
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 6px;
-      margin-bottom: 10px;
     }
   </style>
 </head>
+
 <body>
-  <h1>消費獎賞2025 – 家庭紀錄</h1>
 
-  <label for="weekSelector">選擇週次：</label>
-  <select id="weekSelector"></select>
+  <div class="container">
+    <h1>消費獎賞 2025 - 家庭紀錄表</h1>
 
-  <button onclick="openForm()">➕ 新增優惠券</button>
-  <button class="export-button" onclick="exportToExcel()">📁 匯出 Excel</button>
+    <!-- 匯出按鈕 -->
+    <button onclick="exportToExcel()">匯出到 Excel</button>
 
-  <div id="overlay"></div>
-  <div id="entryForm">
-    <h3>新增優惠券</h3>
-    <form id="form">
-      <label>家庭成員：</label>
-      <select id="member">
-        <option>爸爸</option>
-        <option>媽媽</option>
-        <option>家姐</option>
-        <option>昌哥</option>
-        <option>妹妹</option>
-      </select><br />
-      <label>支付方式：</label>
-      <select id="payment">
-        <option>中銀</option>
-        <option>工商</option>
-        <option>國際</option>
-        <option>大豐</option>
-        <option>MPay</option>
-        <option>UEPay</option>
-      </select><br />
-      <label>金額：</label>
-      <input type="number" id="amount" step="10" min="10" max="200" required /><br />
-      <button type="submit">確認新增</button>
-      <button type="button" onclick="closeForm()">取消</button>
-    </form>
+    <!-- 匯總 -->
+    <h2>每週消費金額匯總</h2>
+    <table id="summaryTable">
+      <thead>
+        <tr>
+          <th>家庭成員</th>
+          <th>支付方式</th>
+          <th>可消費金額</th>
+        </tr>
+      </thead>
+      <tbody id="summaryBody"></tbody>
+    </table>
+
+    <!-- 記錄表格 -->
+    <h2>優惠券記錄</h2>
+    <table id="recordTable">
+      <thead>
+        <tr>
+          <th>日期範圍</th>
+          <th>家庭成員</th>
+          <th>支付方式</th>
+          <th>金額</th>
+          <th>週次</th>
+          <th>已使用</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="recordBody"></tbody>
+    </table>
+
+    <!-- 新增優惠券按鈕 -->
+    <button onclick="openForm()">新增優惠券</button>
   </div>
 
-  <div id="summaryContainer"></div>
-  <table id="dataTable"></table>
+  <!-- 彈出式新增表單 -->
+  <div class="overlay" id="overlay"></div>
+  <div class="form-popup" id="popupForm">
+    <h3>新增優惠券</h3>
+    <label for="member">家庭成員：</label>
+    <select id="member">
+      <option value="爸爸">爸爸</option>
+      <option value="媽媽">媽媽</option>
+      <option value="家姐">家姐</option>
+      <option value="昌哥">昌哥</option>
+      <option value="妹妹">妹妹</option>
+    </select>
+    <label for="payment">支付方式：</label>
+    <select id="payment">
+      <option value="中銀">中銀</option>
+      <option value="工商">工商</option>
+      <option value="國際">國際</option>
+      <option value="大豐">大豐</option>
+      <option value="MPay">MPay</option>
+      <option value="UEPay">UEPay</option>
+    </select>
+    <label for="amount">金額：</label>
+    <select id="amount">
+      <option value="10">10元</option>
+      <option value="20">20元</option>
+      <option value="50">50元</option>
+      <option value="100">100元</option>
+      <option value="200">200元</option>
+    </select>
+    <label for="week">週次：</label>
+    <input type="text" id="week" placeholder="例如：2025/04/14-2025/04/20">
+    <button onclick="addCoupon()">新增</button>
+    <button class="cancel" onclick="closeForm()">取消</button>
+  </div>
 
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database.js"></script>
   <script>
+    // Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
       authDomain: "testing-a7aba.firebaseapp.com",
+      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/",
       projectId: "testing-a7aba",
-      storageBucket: "testing-a7aba.firebasestorage.app",
+      storageBucket: "testing-a7aba.appspot.com",
       messagingSenderId: "94291975544",
-      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d",
-      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com"
+      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
     };
-    firebase.initializeApp(firebaseConfig);
+
+    const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    function getWeekRange(date = new Date()) {
-      const monday = new Date(date);
-      monday.setDate(date.getDate() - date.getDay() + 1);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      const format = d => d.toISOString().split('T')[0].replace(/-/g, '/');
-      return `${format(monday)}-${format(sunday)}`;
+    let couponData = [];
+
+    // 開啟表單
+    function openForm() {
+      document.getElementById("popupForm").style.display = "block";
+      document.getElementById("overlay").style.display = "block";
     }
 
-    function getWeekKey(date = new Date()) {
-      const firstMonday = new Date("2025-03-24");
-      const currentMonday = new Date(date);
-      currentMonday.setDate(date.getDate() - date.getDay() + 1);
-      const diffWeeks = Math.floor((currentMonday - firstMonday) / (7 * 24 * 60 * 60 * 1000));
-      return `W${diffWeeks + 1}`;
+    // 關閉表單
+    function closeForm() {
+      document.getElementById("popupForm").style.display = "none";
+      document.getElementById("overlay").style.display = "none";
     }
 
-    function loadWeekOptions() {
-      const selector = document.getElementById('weekSelector');
-      selector.innerHTML = "";
-      const start = new Date("2025-03-24");
-      for (let i = 0; i < 10; i++) {
-        const monday = new Date(start);
-        monday.setDate(start.getDate() + i * 7);
-        const option = document.createElement('option');
-        option.value = `W${i + 1}`;
-        option.textContent = getWeekRange(monday);
-        selector.appendChild(option);
-      }
-      selector.value = getWeekKey();
+    // 新增優惠券
+    function addCoupon() {
+      const member = document.getElementById("member").value;
+      const payment = document.getElementById("payment").value;
+      const amount = document.getElementById("amount").value;
+      const week = document.getElementById("week").value;
+
+      const newCoupon = {
+        member,
+        payment,
+        amount,
+        week,
+        used: false
+      };
+
+      couponData.push(newCoupon);
+      saveToFirebase(newCoupon);
+      updateSummary();
+      closeForm();
     }
 
-    // 其餘邏輯仍與原始功能一致，例如資料讀寫、狀態切換、excel 匯出功能等...
+    // 儲存到 Firebase
+    function saveToFirebase(coupon) {
+      const couponRef = db.ref("coupons").push();
+      couponRef.set(coupon);
+    }
 
-    function exportToExcel() {
-      const ref = db.ref("vouchers").child(document.getElementById("weekSelector").value);
-      ref.once("value", snapshot => {
-        const rows = [];
-        snapshot.forEach(child => {
-          const data = child.val();
-          rows.push({
-            家庭成員: data.member,
-            支付方式: data.payment,
-            面額: data.amount,
-            可消費金額: data.amount * 3,
-            已使用: data.used ? "是" : "否",
-            週數: document.getElementById("weekSelector").value
-          });
+    // 更新匯總
+    function updateSummary() {
+      const summaryTable = document.getElementById("summaryBody");
+      summaryTable.innerHTML = "";
+
+      const summary = {};
+
+      couponData.forEach(coupon => {
+        if (!summary[coupon.member]) {
+          summary[coupon.member] = {};
+        }
+        if (!summary[coupon.member][coupon.payment]) {
+          summary[coupon.member][coupon.payment] = 0;
+        }
+        summary[coupon.member][coupon.payment] += parseInt(coupon.amount);
+      });
+
+      Object.keys(summary).forEach(member => {
+        Object.keys(summary[member]).forEach(payment => {
+          const row = document.createElement("tr");
+          const amount = summary[member][payment];
+          row.innerHTML = `<td>${member}</td><td>${payment}</td><td>${amount}元</td>`;
+          summaryTable.appendChild(row);
         });
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "優惠券紀錄");
-        XLSX.writeFile(wb, `消費獎賞_${new Date().toISOString().slice(0,10)}.xlsx`);
       });
     }
 
-    loadWeekOptions();
-    // 初始化資料載入等...
+    // 匯出至 Excel
+    function exportToExcel() {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(couponData);
+      XLSX.utils.book_append_sheet(wb, ws, "Coupons");
+      XLSX.writeFile(wb, "Coupons.xlsx");
+    }
+
+    // 初始化 Firebase 讀取資料
+    db.ref("coupons").on("child_added", snapshot => {
+      const coupon = snapshot.val();
+      couponData.push(coupon);
+      updateSummary();
+    });
   </script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script>
 </body>
+
 </html>
