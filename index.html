@@ -168,7 +168,7 @@
       <div class="select-wrapper">
         <label for="weekSelect">選擇日期範圍：</label>
         <select id="weekSelect" onchange="filterByWeek()">
-          <option value="">--選擇週次--</option>
+          <!-- 週次選項會在 JavaScript 生成 -->
         </select>
       </div>
     </div>
@@ -246,7 +246,7 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let couponData = [];
+    let couponData = [];  // 修正初始化問題
     let weekData = [];
 
     // 開啟表單
@@ -375,6 +375,14 @@
         option.text = `第 ${i} 週`;
         weekSelect.appendChild(option);
       }
+
+      // 自動選擇當前週次
+      const currentWeek = getCurrentWeek();
+      weekSelect.value = currentWeek;
+
+      // 更新匯總和記錄
+      updateSummary();
+      updateRecords();
     };
 
   </script>
