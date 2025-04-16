@@ -1,155 +1,149 @@
-// Replace with your Firebase config
+// Firebase 初始化
 const firebaseConfig = {
   apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
   authDomain: "testing-a7aba.firebaseapp.com",
   projectId: "testing-a7aba",
   storageBucket: "testing-a7aba.firebasestorage.app",
   messagingSenderId: "94291975544",
-  appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
+  appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d",
+  databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/"
 };
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const db = firebase.database();
 
-// Load last used family role from localStorage
-const familyRoles = ["Dad", "Mom", "Son", "Daughter", "Grandpa", "Grandma"];
-document.getElementById('family-role').value = localStorage.getItem('lastFamilyRole') || "Dad";
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const BASE_DATE = new Date("2025-01-01");
 
-// Event listener for family role change
-document.getElementById('family-role').addEventListener('change', (e) => {
-  localStorage.setItem('lastFamilyRole', e.target.value);
-});
+function getCurrentWeek() {
+  const now = new Date();
+  return Math.floor((now - BASE_DATE) / WEEK_MS) + 1;
+}
 
-// Initialize variables
-let currentDraws = {};
+function getWeekOptions(currentWeek) {
+  return Array.from({ length: currentWeek }, (_, i) => i + 1);
+}
 
-// Function to load data from Firestore
-function loadWeekData() {
-  const selectedWeek = document.getElementById('week-select').value;
-  db.doc(`weeks/${selectedWeek}`).onSnapshot(doc => {
-    if (doc.exists) {
-      currentDraws = doc.data().draws || {};
-    } else {
-      currentDraws = {};
-    }
-    updateTable();
-    calculateTotals();
+function openModal() {
+  document.getElementById("entryModal").classList.remove("hidden");
+}
+
+function closeModal() {
+  document.getElementById("entryModal").classList.add("hidden");
+}
+
+function exportToExcel() {
+  db.ref("coupons/" + selectedWeek).once("value", (snapshot) => {
+    const entries = snapshot.val();
+    if (!entries) return alert("沒有資料可匯出");
+
+    const rows = Object.entries(entries).map(([id, e]) => ({
+      家庭成員: e.member,
+      支付方式: e.method,
+      金額: e.amount,
+      狀態: e.used ? "已使用" : "未使用"
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "優惠券");
+    XLSX.writeFile(wb, `優惠券_第${selectedWeek}週.xlsx`);
   });
 }
 
-// Function to add a new draw
-document.getElementById('add-draw').addEventListener('click', () => {
-  const familyRole = document.getElementById('family-role').value;
-  const paymentMethod = document.getElementById('payment-method').value;
-  const drawValue = parseInt(document.getElementById('draw-value').value);
+let selectedWeek = getCurrentWeek();
 
-  if (!currentDraws[paymentMethod]) {
-    currentDraws[paymentMethod] = [];
-  }
+function updateWeekSelector() {
+  const selector = document.getElementById("weekSelector");
+  selector.innerHTML = "";
+  getWeekOptions(selectedWeek).reverse().forEach(w => {
+    const opt = document.createElement("option");
+    opt.value = w;
+    opt.textContent = `第 ${w} 週`;
+    selector.appendChild(opt);
+  });
+  selector.value = selectedWeek;
+  selector.onchange = () => {
+    selectedWeek = parseInt(selector.value);
+    loadData();
+  };
+}
 
-  // Ensure we have 3 draws, fill with {value: 0, used: false} if less
-  while (currentDraws[paymentMethod].length < 3) {
-    currentDraws[paymentMethod].push({ value: 0, used: false, familyRole: "" });
-  }
-
-  // Find the first null or 0 value to replace
-  let replaced = false;
-  for (let i = 0; i < 3; i++) {
-    if (currentDraws[paymentMethod][i].value === 0 || currentDraws[paymentMethod][i].value === null) {
-      currentDraws[paymentMethod][i] = { value: drawValue, used: false, familyRole: familyRole };
-      replaced = true;
-      break;
-    }
-  }
-
-  if (!replaced) {
-    alert("每個支付方式最多3次抽獎，已滿！");
-    return;
-  }
-
-  saveData();
-});
-
-// Function to update the table display
-function updateTable() {
-  const tbody = document.querySelector('#draws-table tbody');
-  tbody.innerHTML = '';
-  for (const [method, draws] of Object.entries(currentDraws)) {
-    draws.forEach((draw, index) => {
-      if (draw.value > 0) { // Only show draws with value > 0
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${draw.familyRole}</td>
-          <td>${getMethodName(method)}</td>
-          <td>抽獎 ${index + 1}</td>
-          <td>${draw.value} 元</td>
-          <td>
-            <input type="checkbox" class="used-checkbox" data-method="${method}" data-index="${index}" ${draw.used ? 'checked' : ''}>
-          </td>
-          <td>已使用</td>
-        `;
-        tbody.appendChild(row);
-      }
-    });
-  }
-
-  // Add event listeners for used checkboxes
-  document.querySelectorAll('.used-checkbox').forEach(checkbox => {
-    checkbox.addEventListener('change', (e) => {
-      const method = e.target.dataset.method;
-      const index = parseInt(e.target.dataset.index);
-      currentDraws[method][index].used = e.target.checked;
-      saveData();
-    });
+function loadData() {
+  db.ref("coupons/" + selectedWeek).on("value", (snapshot) => {
+    const data = snapshot.val() || {};
+    renderTable(data);
+    renderSummary(data);
   });
 }
 
-// Function to get payment method name
-function getMethodName(key) {
-  const method = paymentMethods.find(m => m.key === key);
-  return method ? method.name : key;
+function renderTable(data) {
+  const tableContainer = document.getElementById("tableContainer");
+  let html = `<table><thead><tr><th>家庭成員</th><th>支付方式</th><th>金額</th><th>狀態</th><th>操作</th></tr></thead><tbody>`;
+  for (const [id, entry] of Object.entries(data)) {
+    html += `<tr class="member-${entry.member}">
+      <td>${entry.member}</td>
+      <td>${entry.method}</td>
+      <td>${entry.amount}</td>
+      <td>${entry.used ? "✅" : "❌"}</td>
+      <td>
+        <button class="action-btn" onclick="markUsed('${id}', ${!entry.used})">📝</button>
+        <button class="action-btn" onclick="removeEntry('${id}')">🗑️</button>
+      </td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  tableContainer.innerHTML = html;
 }
 
-// Function to calculate totals
-function calculateTotals() {
-  let totalRequired = 0;
-  const roleTotals = {};
+function renderSummary(data) {
+  const summary = {};
+  let total = 0;
 
-  for (const [method, draws] of Object.entries(currentDraws)) {
-    draws.forEach(draw => {
-      if (draw.value > 0 && !draw.used) {
-        const required = draw.value * 3;
-        totalRequired += required;
-        if (draw.familyRole) {
-          roleTotals[draw.familyRole] = (roleTotals[draw.familyRole] || 0) + required;
-        }
-      }
-    });
+  for (const entry of Object.values(data)) {
+    if (!entry.used) continue;
+    const { member, method, amount } = entry;
+    if (!summary[member]) summary[member] = { total: 0, methods: {} };
+    if (!summary[member].methods[method]) summary[member].methods[method] = 0;
+    summary[member].methods[method] += amount;
+    summary[member].total += amount;
+    total += amount;
   }
 
-  document.getElementById('total-required').textContent = totalRequired;
-  const roleTotalsDiv = document.getElementById('role-totals');
-  roleTotalsDiv.innerHTML = '<h5>小計：</h5>';
-  for (const [role, amount] of Object.entries(roleTotals)) {
-    roleTotalsDiv.innerHTML += `<p>${role}: ${amount} 元</p>`;
+  let html = `<table><thead><tr><th>家庭成員</th><th>支付方式</th><th>金額</th><th>合計</th></tr></thead><tbody>`;
+  for (const [member, { total: sum, methods }] of Object.entries(summary)) {
+    const rows = Object.entries(methods).map(([method, amt]) =>
+      `<tr><td>${member}</td><td>${method}</td><td>${amt}</td><td rowspan="${Object.keys(methods).length}">${sum}</td></tr>`
+    );
+    html += rows.join("");
   }
+  html += `</tbody></table><p><strong>全家本週可消費金額：${total} 元</strong></p>`;
+  document.getElementById("summaryTableContainer").innerHTML = html;
 }
 
-// Function to save data to Firestore
-function saveData() {
-  const selectedWeek = document.getElementById('week-select').value;
-  db.doc(`weeks/${selectedWeek}`).set({ draws: currentDraws })
-    .then(() => {
-      alert('數據保存成功');
-    })
-    .catch(error => {
-      alert('保存數據時出錯：' + error.message);
-    });
+function addEntry(e) {
+  e.preventDefault();
+  const member = document.getElementById("member").value;
+  const method = document.getElementById("method").value;
+  const amount = parseInt(document.getElementById("amount").value);
+  const count = parseInt(document.getElementById("count").value);
+
+  for (let i = 0; i < count; i++) {
+    const ref = db.ref("coupons/" + selectedWeek).push();
+    ref.set({ member, method, amount, used: false });
+  }
+  document.getElementById("entryForm").reset();
+  closeModal();
 }
 
-// Event listeners
-document.getElementById('week-select').addEventListener('change', loadWeekData);
-document.getElementById('save-btn').addEventListener('click', saveData);
+function markUsed(id, status) {
+  db.ref(`coupons/${selectedWeek}/${id}`).update({ used: status });
+}
 
-// Initial load
-loadWeekData();
+function removeEntry(id) {
+  db.ref(`coupons/${selectedWeek}/${id}`).remove();
+}
+
+// 初始化
+updateWeekSelector();
+loadData();
+document.getElementById("entryForm").addEventListener("submit", addEntry);
