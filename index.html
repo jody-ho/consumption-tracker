@@ -1,391 +1,245 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
-
+<html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>消費獎賞 2025 - 家庭紀錄表</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>消費獎賞2025 – 家庭紀錄表</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background-color: #f7f7f7;
-      padding: 20px;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    h1 {
-      text-align: center;
+      font-family: "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background-color: #f4f4f8;
       color: #333;
     }
-
-    table {
+    h1, h2 {
+      text-align: center;
+    }
+    .summary-table, .data-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
+      margin-bottom: 1rem;
     }
-
-    table,
-    th,
-    td {
+    .summary-table th, .summary-table td,
+    .data-table th, .data-table td {
       border: 1px solid #ccc;
-    }
-
-    th,
-    td {
-      padding: 8px;
+      padding: 0.5rem;
       text-align: center;
     }
-
-    th {
-      background-color: #f2f2f2;
-    }
-
-    button {
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    button:hover {
-      background-color: #45a049;
-    }
-
-    .form-popup {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background-color: white;
-      padding: 20px;
-      border: 1px solid #ccc;
-      z-index: 1000;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .form-popup input,
-    .form-popup select {
-      width: 100%;
-      padding: 8px;
-      margin: 10px 0;
-      font-size: 16px;
-    }
-
-    .form-popup button {
-      background-color: #008CBA;
-    }
-
-    .form-popup button.cancel {
-      background-color: red;
-    }
-
-    .form-popup button:hover {
-      background-color: #45a049;
-    }
-
-    .overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.4);
-      z-index: 999;
-    }
-
-    .icon-button {
-      background: none;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-    }
-
-    .icon-button:hover {
-      color: #45a049;
-    }
-
-    .header-actions {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-
-    .header-actions .button-group {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .select-wrapper {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    label {
-      font-size: 16px;
-      color: #333;
-    }
-
-    select {
-      padding: 8px;
-      font-size: 16px;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-    }
-
-    .underlined {
+    .data-table tr.used {
       text-decoration: line-through;
+      opacity: 0.6;
     }
+    .btn {
+      font-size: 1.2rem;
+      padding: 0.4rem 0.8rem;
+      border: none;
+      border-radius: 0.4rem;
+      cursor: pointer;
+    }
+    .btn:hover {
+      opacity: 0.8;
+    }
+    .popup {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .popup-content {
+      background: #fff;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      width: 90%;
+      max-width: 400px;
+    }
+    .popup-content label, select, input {
+      display: block;
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+      width: 100%;
+    }
+    .popup-content button {
+      font-size: 1.2rem;
+    }
+    .member-爸爸 { background-color: #cce5ff; }
+    .member-媽媽 { background-color: #ffd6e7; }
+    .member-家姐 { background-color: #d4edda; }
+    .member-昌哥 { background-color: #ffe5b4; }
+    .member-妹妹 { background-color: #e6ccff; }
   </style>
 </head>
-
 <body>
+  <h1>消費獎賞2025 – 家庭紀錄表</h1>
 
-  <div class="container">
-    <h1>消費獎賞 2025 - 家庭紀錄表</h1>
+  <button class="btn" onclick="showPopup()">➕ 新增優惠券</button>
 
-    <!-- 上方操作區域 -->
-    <div class="header-actions">
-      <div class="button-group">
-        <!-- 新增優惠券按鈕 -->
-        <button onclick="openForm()">新增優惠券</button>
+  <div id="summary"></div>
 
-        <!-- 匯出到 Excel 按鈕（圖標） -->
-        <button class="icon-button" onclick="exportToExcel()">📥</button>
-      </div>
+  <h2>每週記錄</h2>
+  <select id="weekSelect" onchange="loadDataForWeek()"></select>
 
-      <!-- 日期範圍選擇 -->
-      <div class="select-wrapper">
-        <label for="weekSelect">選擇日期範圍：</label>
-        <select id="weekSelect" onchange="filterByWeek()">
-          <!-- 週次選項會在 JavaScript 生成 -->
+  <table class="data-table" id="couponTable">
+    <thead>
+      <tr>
+        <th>家庭成員</th>
+        <th>支付方式</th>
+        <th>金額</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="couponList"></tbody>
+  </table>
+
+  <!-- 彈出新增視窗 -->
+  <div class="popup" id="popup" style="display:none">
+    <div class="popup-content">
+      <h2>新增優惠券</h2>
+      <label>家庭成員：
+        <select id="member">
+          <option>爸爸</option><option>媽媽</option><option>家姐</option><option>昌哥</option><option>妹妹</option>
         </select>
-      </div>
+      </label>
+      <label>支付方式：
+        <select id="payment">
+          <option>中銀</option><option>工商</option><option>國際</option><option>大豐</option><option>MPay</option><option>UEPay</option>
+        </select>
+      </label>
+      <label>金額：
+        <input type="number" id="amount" min="10" max="200" step="10" />
+      </label>
+      <button onclick="addCoupon()" class="btn">✅ 新增</button>
+      <button onclick="hidePopup()" class="btn">❌ 關閉</button>
     </div>
-
-    <!-- 匯總 -->
-    <h2>每週消費金額匯總</h2>
-    <table id="summaryTable">
-      <thead>
-        <tr>
-          <th>家庭成員</th>
-          <th>支付方式</th>
-          <th>可消費金額</th>
-        </tr>
-      </thead>
-      <tbody id="summaryBody"></tbody>
-    </table>
-
-    <!-- 記錄表格 -->
-    <h2>優惠券記錄</h2>
-    <table id="recordTable">
-      <thead>
-        <tr>
-          <th>家庭成員</th>
-          <th>支付方式</th>
-          <th>金額</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="recordBody"></tbody>
-    </table>
-
   </div>
 
-  <!-- 彈出式新增表單 -->
-  <div class="overlay" id="overlay"></div>
-  <div class="form-popup" id="popupForm">
-    <h3>新增優惠券</h3>
-    <label for="member">家庭成員：</label>
-    <select id="member">
-      <option value="爸爸">爸爸</option>
-      <option value="媽媽">媽媽</option>
-      <option value="家姐">家姐</option>
-      <option value="昌哥">昌哥</option>
-      <option value="妹妹">妹妹</option>
-    </select>
-    <label for="payment">支付方式：</label>
-    <select id="payment">
-      <option value="中銀">中銀</option>
-      <option value="工商">工商</option>
-      <option value="國際">國際</option>
-      <option value="大豐">大豐</option>
-      <option value="MPay">MPay</option>
-      <option value="UEPay">UEPay</option>
-    </select>
-    <label for="amount">金額（用逗號分隔）：</label>
-    <input type="text" id="amount" placeholder="例如：10,20,50">
-    <button onclick="addCoupon()">新增</button>
-    <button class="cancel" onclick="closeForm()">取消</button>
-  </div>
-
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database.js"></script>
   <script>
-    // Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
       authDomain: "testing-a7aba.firebaseapp.com",
-      databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/",
       projectId: "testing-a7aba",
       storageBucket: "testing-a7aba.appspot.com",
       messagingSenderId: "94291975544",
       appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
     };
+    const dbURL = "https://testing-a7aba-default-rtdb.firebaseio.com/";
 
-    const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    let currentWeek = getWeekKey();
+    let coupons = {};
 
-    let couponData = [];  // 修正初始化問題
-    let weekData = [];
-
-    // 開啟表單
-    function openForm() {
-      document.getElementById("popupForm").style.display = "block";
-      document.getElementById("overlay").style.display = "block";
+    function getWeekKey(date = new Date()) {
+      const year = date.getFullYear();
+      const week = Math.ceil((((date - new Date(date.getFullYear(),0,1)) / 86400000) + new Date(date.getFullYear(),0,1).getDay()+1)/7);
+      return `${year}-W${week}`;
     }
 
-    // 關閉表單
-    function closeForm() {
-      document.getElementById("popupForm").style.display = "none";
-      document.getElementById("overlay").style.display = "none";
+    function showPopup() {
+      document.getElementById('popup').style.display = 'flex';
+    }
+    function hidePopup() {
+      document.getElementById('popup').style.display = 'none';
     }
 
-    // 新增優惠券
     function addCoupon() {
-      const member = document.getElementById("member").value;
-      const payment = document.getElementById("payment").value;
-      const amount = document.getElementById("amount").value.split(',');  // 支付金額用逗號分隔
-      const week = getCurrentWeek();
-
-      amount.forEach(amnt => {
-        const newCoupon = {
-          member,
-          payment,
-          amount: amnt,
-          week,
-          used: false
-        };
-
-        couponData.push(newCoupon);
-        saveToFirebase(newCoupon);
-      });
-
-      updateSummary();
-      updateRecords();
-      closeForm();
-    }
-
-    // 儲存到 Firebase
-    function saveToFirebase(coupon) {
-      const couponRef = db.ref("coupons").push();
-      couponRef.set(coupon);
-    }
-
-    // 更新匯總
-    function updateSummary() {
-      const summaryTable = document.getElementById("summaryBody");
-      summaryTable.innerHTML = "";  // 清空表格
-
-      const members = ["爸爸", "媽媽", "家姐", "昌哥", "妹妹"];
-      members.forEach(member => {
-        let total = 0;
-        couponData.forEach(coupon => {
-          if (coupon.member === member && !coupon.used) {
-            total += parseInt(coupon.amount, 10);
-          }
-        });
-        const row = `<tr>
-          <td>${member}</td>
-          <td>中銀</td> <!-- 這裡可以根據需要改變支付方式 -->
-          <td>${total}</td>
-        </tr>`;
-        summaryTable.innerHTML += row;
+      const member = document.getElementById('member').value;
+      const payment = document.getElementById('payment').value;
+      const amount = parseInt(document.getElementById('amount').value);
+      if (!amount) return alert('請輸入有效金額');
+      const id = Date.now();
+      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ member, payment, amount, used: false })
+      }).then(() => {
+        hidePopup();
+        loadDataForWeek();
       });
     }
 
-    // 更新記錄
-    function updateRecords() {
-      const recordTable = document.getElementById("recordBody");
-      recordTable.innerHTML = "";  // 清空表格
+    function toggleUsed(id) {
+      const current = coupons[id];
+      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...current, used: !current.used })
+      }).then(loadDataForWeek);
+    }
 
-      couponData.forEach((coupon, index) => {
-        const row = `<tr id="coupon-${index}">
-          <td>${coupon.member}</td>
-          <td>${coupon.payment}</td>
-          <td>${coupon.amount}</td>
-          <td>
-            <button onclick="markAsUsed(${index})">使用</button>
-            <button onclick="deleteCoupon(${index})">刪除</button>
-          </td>
-        </tr>`;
-        recordTable.innerHTML += row;
+    function deleteCoupon(id) {
+      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
+        method: 'DELETE'
+      }).then(loadDataForWeek);
+    }
+
+    function loadDataForWeek() {
+      currentWeek = document.getElementById('weekSelect').value || getWeekKey();
+      fetch(`${dbURL}/coupons/${currentWeek}.json`).then(res => res.json()).then(data => {
+        coupons = data || {};
+        const tbody = document.getElementById('couponList');
+        tbody.innerHTML = '';
+        const summary = {};
+        for (let id in coupons) {
+          const { member, payment, amount, used } = coupons[id];
+          summary[member] = summary[member] || {};
+          summary[member][payment] = summary[member][payment] || { total: 0, used: 0 };
+          summary[member][payment].total += amount;
+          if (used) summary[member][payment].used += amount;
+
+          const tr = document.createElement('tr');
+          if (used) tr.classList.add('used');
+          tr.classList.add(`member-${member}`);
+          tr.innerHTML = `
+            <td>${member}</td>
+            <td>${payment}</td>
+            <td>${amount}</td>
+            <td>
+              <button class="btn" onclick="toggleUsed(${id})">✅</button>
+              <button class="btn" onclick="deleteCoupon(${id})">🗑️</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+        updateSummary(summary);
       });
     }
 
-    // 標記為已使用
-    function markAsUsed(index) {
-      couponData[index].used = true;
-      updateSummary();
-      updateRecords();
-    }
-
-    // 刪除優惠券
-    function deleteCoupon(index) {
-      couponData.splice(index, 1);
-      updateSummary();
-      updateRecords();
-    }
-
-    // 取得當前週次
-    function getCurrentWeek() {
-      const currentDate = new Date();
-      const startDate = new Date(currentDate.getFullYear(), 0, 1);
-      const days = Math.floor((currentDate - startDate) / (24 * 60 * 60 * 1000));
-      return Math.ceil(days / 7);
-    }
-
-    // 篩選週次
-    function filterByWeek() {
-      const selectedWeek = document.getElementById("weekSelect").value;
-      if (selectedWeek) {
-        couponData = couponData.filter(coupon => coupon.week === selectedWeek);
-        updateSummary();
-        updateRecords();
+    function updateSummary(summary) {
+      let html = '<table class="summary-table"><thead><tr><th>家庭成員</th><th>支付方式</th><th>可消費金額</th></tr></thead><tbody>';
+      let familyTotal = 0;
+      for (let member in summary) {
+        let memberTotal = 0;
+        for (let pay in summary[member]) {
+          const usable = (summary[member][pay].total - summary[member][pay].used) * 3;
+          html += `<tr><td>${member}</td><td>${pay}</td><td>${usable}</td></tr>`;
+          memberTotal += usable;
+        }
+        html += `<tr style="font-weight:bold"><td colspan="2">${member}合計</td><td>${memberTotal}</td></tr>`;
+        familyTotal += memberTotal;
       }
+      html += `<tr style="font-weight:bold;background:#eee"><td colspan="2">全家合計</td><td>${familyTotal}</td></tr>`;
+      html += '</tbody></table>';
+      document.getElementById('summary').innerHTML = html;
     }
 
-    // 初始化頁面
-    window.onload = function () {
-      // 渲染週次選項
-      const weekSelect = document.getElementById("weekSelect");
-      for (let i = 1; i <= 52; i++) {
-        const option = document.createElement("option");
-        option.value = i;
-        option.text = `第 ${i} 週`;
-        weekSelect.appendChild(option);
+    function initWeekDropdown() {
+      const now = new Date();
+      const select = document.getElementById('weekSelect');
+      for (let i = -2; i <= 4; i++) {
+        const d = new Date(now);
+        d.setDate(now.getDate() + i * 7);
+        const key = getWeekKey(d);
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = key;
+        if (key === getWeekKey()) opt.selected = true;
+        select.appendChild(opt);
       }
+      loadDataForWeek();
+    }
 
-      // 自動選擇當前週次
-      const currentWeek = getCurrentWeek();
-      weekSelect.value = currentWeek;
-
-      // 更新匯總和記錄
-      updateSummary();
-      updateRecords();
-    };
-
+    window.onload = initWeekDropdown;
   </script>
 </body>
-
 </html>
