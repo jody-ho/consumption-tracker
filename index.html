@@ -37,11 +37,12 @@
       text-decoration: line-through;
       color: gray;
     }
-    .summary {
+    .summary, .total-summary {
       margin-top: 1rem;
       padding: 0.5rem;
       background: #fff;
       border: 1px solid #ccc;
+      margin-bottom: 1rem;
     }
     button {
       padding: 10px 15px;
@@ -54,6 +55,22 @@
     }
     button:hover {
       background-color: #45a049;
+    }
+    .modal-content {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      width: 300px;
+      margin: 100px auto;
+    }
+    .close {
+      color: #aaa;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      position: absolute;
+      right: 10px;
+      top: 10px;
     }
   </style>
 </head>
@@ -107,6 +124,12 @@
     </div>
   </div>
 
+  <div class="total-summary" id="totalSummary">
+    <strong>整個家庭本週可消費金額: <span id="totalAmount">0</span>元</strong>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
   <table>
     <thead>
       <tr>
@@ -119,8 +142,6 @@
     </thead>
     <tbody id="couponTable"></tbody>
   </table>
-
-  <div class="summary" id="summary"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -163,12 +184,16 @@
       const tbody = document.getElementById('couponTable');
       tbody.innerHTML = '';
       const summary = {};
+      const totalAmount = {
+        中銀: 0, 工商: 0, 國際: 0, 大豐: 0, MPay: 0, UEPay: 0,
+      };
+      let familyTotal = 0;
 
       Object.entries(coupons).forEach(([key, c]) => {
         const row = document.createElement('tr');
         row.className = c.member;
         row.innerHTML = `
-          <td>${c.member}</td>
+          <td style="background-color: ${getColor(c.member)}">${c.member}</td>
           <td>${c.method}</td>
           <td>${c.amount}</td>
           <td class="${c.used ? 'used' : ''}">${c.used ? '已使用' : '未使用'}</td>
@@ -180,42 +205,61 @@
         tbody.appendChild(row);
 
         if (!summary[c.member]) {
-          summary[c.member] = { need: 0, used: 0 };
+          summary[c.member] = {};
         }
-        if (!c.used) summary[c.member].need += c.amount;
-        else summary[c.member].used += c.amount;
+        if (!summary[c.member][c.method]) {
+          summary[c.member][c.method] = 0;
+        }
+        summary[c.member][c.method] += c.amount;
+
+        if (!c.used) {
+          familyTotal += c.amount;
+        }
+
+        totalAmount[c.method] += c.amount;
       });
+
+      document.getElementById('totalAmount').textContent = familyTotal;
 
       let summaryText = '';
       for (const member in summary) {
-        summaryText += `${member}: 本週可消費金額 ${summary[member].need}，已消費金額 ${summary[member].used} <br>`;
+        summaryText += `<strong>${member}</strong><br>`;
+        for (const method in summary[member]) {
+          summaryText += `${method}: ${summary[member][method]}元<br>`;
+        }
+        summaryText += `合計: ${Object.values(summary[member]).reduce((a, b) => a + b, 0)}元<br><br>`;
       }
-
-      document.getElementById('summary').innerHTML = `
-        <strong>每人本週可消費金額:</strong><br>
-        ${summaryText}
-      `;
+      document.getElementById('summary').innerHTML = summaryText;
     }
 
-    function markUsed(key, value) {
-      update(ref(db, `coupons/${key}`), { used: value });
+    function getColor(member) {
+      const colors = {
+        '爸爸': 'lightblue',
+        '媽媽': 'lightgreen',
+        '家姐': 'lightyellow',
+        '昌哥': 'lightcoral',
+        '妹妹': 'lightpink',
+      };
+      return colors[member] || 'white';
+    }
+
+    function markUsed(key, used) {
+      update(ref(db, 'coupons/' + key), { used });
     }
 
     function removeEntry(key) {
-      remove(ref(db, `coupons/${key}`));
+      remove(ref(db, 'coupons/' + key));
     }
 
-    // 導出為 Excel
     function exportToExcel() {
       onValue(couponsRef, (snapshot) => {
-        const coupons = snapshot.val();
+        const coupons = snapshot.val() || {};
         const data = Object.entries(coupons).map(([key, c]) => ({
           '家庭成員': c.member,
           '支付方式': c.method,
           '金額': c.amount,
           '狀態': c.used ? '已使用' : '未使用',
         }));
-
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, '優惠券紀錄');
@@ -234,7 +278,7 @@
     const modal = document.getElementById("myModal");
     const btn = document.getElementById("myBtn");
     const span = document.getElementsByClassName("close")[0];
-    
+
     btn.onclick = function() {
       modal.style.display = "block";
     }
