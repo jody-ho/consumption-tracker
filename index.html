@@ -233,13 +233,25 @@
       fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
         method: 'PUT',
         body: JSON.stringify({ ...current, used: !current.used })
-      }).then(loadDataForWeek);
+      }).then(() => loadDataForWeek()).catch(err => alert('切換使用狀態失敗：' + err.message));
     }
 
     function deleteCoupon(id) {
       fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
         method: 'DELETE'
-      }).then(loadDataForWeek);
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('刪除失敗，伺服器回應錯誤');
+          }
+          return response.json();
+        })
+        .then(() => {
+          loadDataForWeek(); // Refresh UI after successful deletion
+        })
+        .catch(err => {
+          alert('刪除失敗：' + err.message);
+        });
     }
 
     function loadDataForWeek() {
@@ -265,13 +277,13 @@
             <td>${amount}</td>
             <td>
               <button class="btn" onclick="toggleUsed(${id})">✅</button>
-              <button class="btn" onclick="deleteCoupon(${id})">🗑️</button>
+              <button class="btn" onclick="deleteCoupon('${id}')">🗑️</button>
             </td>
           `;
           tbody.appendChild(tr);
         }
         updateSummary(summary);
-      });
+      }).catch(err => alert('載入資料失敗：' + err.message));
     }
 
     function updateSummary(summary) {
