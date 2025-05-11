@@ -57,7 +57,7 @@
       width: 90%;
       max-width: 400px;
     }
-    .popup-content label, select, input {
+    .popup-content label, select {
       display: block;
       margin-bottom: 1rem;
       font-size: 1.2rem;
@@ -109,8 +109,35 @@
           <option>中銀</option><option>工商</option><option>國際</option><option>大豐</option><option>MPay</option><option>UEPay</option>
         </select>
       </label>
-      <label>金額：
-        <input type="number" id="amount" min="10" max="200" step="10" />
+      <label>金額 1：
+        <select id="amount1">
+          <option value="0">0</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+      </label>
+      <label>金額 2：
+        <select id="amount2">
+          <option value="0">0</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+      </label>
+      <label>金額 3：
+        <select id="amount3">
+          <option value="0">0</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
       </label>
       <button onclick="addCoupon()" class="btn">✅ 新增</button>
       <button onclick="hidePopup()" class="btn">❌ 關閉</button>
@@ -132,9 +159,23 @@
     let coupons = {};
 
     function getWeekKey(date = new Date()) {
-      const year = date.getFullYear();
-      const week = Math.ceil((((date - new Date(date.getFullYear(),0,1)) / 86400000) + new Date(date.getFullYear(),0,1).getDay()+1)/7);
-      return `${year}-W${week}`;
+      const d = new Date(date);
+      d.setDate(d.getDate() - (d.getDay() || 7) + 1); // Set to Monday
+      const year = d.getFullYear();
+      const startOfYear = new Date(year, 0, 1);
+      const weekNumber = Math.ceil((((d - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
+      return `${year}-W${weekNumber}`;
+    }
+
+    function formatWeekLabel(date) {
+      const monday = new Date(date);
+      monday.setDate(monday.getDate() - (monday.getDay() || 7) + 1); // Set to Monday
+      const sunday = new Date(monday);
+      sunday.setDate(sunday.getDate() + 6); // Set to Sunday
+      const year = monday.getFullYear();
+      const weekNumber = Math.ceil((((monday - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
+      const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return `${formatDate(monday)} ~ ${formatDate(sunday)} (W${weekNumber})`;
     }
 
     function showPopup() {
@@ -147,16 +188,44 @@
     function addCoupon() {
       const member = document.getElementById('member').value;
       const payment = document.getElementById('payment').value;
-      const amount = parseInt(document.getElementById('amount').value);
-      if (!amount) return alert('請輸入有效金額');
-      const id = Date.now();
-      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
-        method: 'PUT',
-        body: JSON.stringify({ member, payment, amount, used: false })
+      const amounts = [
+        parseInt(document.getElementById('amount1').value),
+        parseInt(document.getElementById('amount2').value),
+        parseInt(document.getElementById('amount3').value)
+      ].filter(a => a !== 0); // Exclude 0 values
+
+      if (amounts.length === 0) {
+        alert('請選擇至少一個非零金額');
+        return;
+      }
+
+      // Check existing coupons for this payment method in the current week
+      let existingCouponCount = 0;
+      for (let id in coupons) {
+        if (coupons[id].payment === payment && coupons[id].member === member) {
+          existingCouponCount++;
+        }
+      }
+
+      if (existingCouponCount + amounts.length > 3) {
+        alert(`此支付方式 (${payment}) 最多只能有3張優惠券，當前已有 ${existingCouponCount} 張`);
+        return;
+      }
+
+      // Add coupons to Firebase
+      const updates = {};
+      amounts.forEach(amount => {
+        const id = Date.now() + Math.random().toString(36).substr(2, 9);
+        updates[`/coupons/${currentWeek}/${id}`] = { member, payment, amount, used: false };
+      });
+
+      fetch(`${dbURL}.json`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates)
       }).then(() => {
         hidePopup();
         loadDataForWeek();
-      });
+      }).catch(err => alert('新增失敗：' + err.message));
     }
 
     function toggleUsed(id) {
@@ -224,16 +293,17 @@
     }
 
     function initWeekDropdown() {
-      const now = new Date();
       const select = document.getElementById('weekSelect');
-      for (let i = -2; i <= 4; i++) {
-        const d = new Date(now);
-        d.setDate(now.getDate() + i * 7);
+      const startDate = new Date('2025-04-14'); // Monday of the week containing April 17
+      const endDate = new Date('2025-06-01');
+      const oneWeek = 7 * 24 * 60 * 60 * 1000;
+
+      for (let d = new Date(startDate); d <= endDate; d.setTime(d.getTime() + oneWeek)) {
         const key = getWeekKey(d);
         const opt = document.createElement('option');
         opt.value = key;
-        opt.textContent = key;
-        if (key === getWeekKey()) opt.selected = true;
+        opt.textContent = formatWeekLabel(d);
+        if (key === getWeekKey(new Date())) opt.selected = true;
         select.appendChild(opt);
       }
       loadDataForWeek();
