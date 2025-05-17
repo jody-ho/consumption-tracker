@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>消費獎賞2025 – 家庭紀錄表</title>
   <style>
     body {
@@ -145,6 +145,7 @@
   </div>
 
   <script>
+    console.log('Script loaded');
     const firebaseConfig = {
       apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
       authDomain: "testing-a7aba.firebaseapp.com",
@@ -181,6 +182,7 @@
     function showPopup() {
       document.getElementById('popup').style.display = 'flex';
     }
+
     function hidePopup() {
       document.getElementById('popup').style.display = 'none';
     }
@@ -222,18 +224,44 @@
       fetch(`${dbURL}.json`, {
         method: 'PATCH',
         body: JSON.stringify(updates)
-      }).then(() => {
-        hidePopup();
-        loadDataForWeek();
-      }).catch(err => alert('新增失敗：' + err.message));
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`新增失敗，伺服器回應錯誤: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(() => {
+          hidePopup();
+          loadDataForWeek();
+        })
+        .catch(err => {
+          console.error('新增錯誤:', err);
+          alert('新增失敗：' + err.message);
+        });
     }
 
     function toggleUsed(id) {
       const current = coupons[id];
+      if (!current) {
+        alert('優惠券資料不存在');
+        return;
+      }
       fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
         method: 'PUT',
         body: JSON.stringify({ ...current, used: !current.used })
-      }).then(() => loadDataForWeek()).catch(err => alert('切換使用狀態失敗：' + err.message));
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`切換狀態失敗，伺服器回應錯誤: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(() => loadDataForWeek())
+        .catch(err => {
+          console.error('切換狀態錯誤:', err);
+          alert('切換使用狀態失敗：' + err.message);
+        });
     }
 
     function deleteCoupon(id) {
@@ -242,48 +270,59 @@
       })
         .then(response => {
           if (!response.ok) {
-            throw new Error('刪除失敗，伺服器回應錯誤');
+            throw new Error(`刪除失敗，伺服器回應錯誤: ${response.status}`);
           }
           return response.json();
         })
-        .then(() => {
-          loadDataForWeek(); // Refresh UI after successful deletion
-        })
+        .then(() => loadDataForWeek())
         .catch(err => {
+          console.error('刪除錯誤:', err);
           alert('刪除失敗：' + err.message);
         });
     }
 
     function loadDataForWeek() {
       currentWeek = document.getElementById('weekSelect').value || getWeekKey();
-      fetch(`${dbURL}/coupons/${currentWeek}.json`).then(res => res.json()).then(data => {
-        coupons = data || {};
-        const tbody = document.getElementById('couponList');
-        tbody.innerHTML = '';
-        const summary = {};
-        for (let id in coupons) {
-          const { member, payment, amount, used } = coupons[id];
-          summary[member] = summary[member] || {};
-          summary[member][payment] = summary[member][payment] || { total: 0, used: 0 };
-          summary[member][payment].total += amount;
-          if (used) summary[member][payment].used += amount;
+      fetch(`${dbURL}/coupons/${currentWeek}.json`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`載入資料失敗，伺服器回應錯誤: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('載入資料:', data);
+          coupons = data || {};
+          const tbody = document.getElementById('couponList');
+          tbody.innerHTML = '';
+          const summary = {};
+          for (let id in coupons) {
+            const { member, payment, amount, used } = coupons[id];
+            summary[member] = summary[member] || {};
+            summary[member][payment] = summary[member][payment] || { total: 0, used: 0 };
+            summary[member][payment].total += amount;
+            if (used) summary[member][payment].used += amount;
 
-          const tr = document.createElement('tr');
-          if (used) tr.classList.add('used');
-          tr.classList.add(`member-${member}`);
-          tr.innerHTML = `
-            <td>${member}</td>
-            <td>${payment}</td>
-            <td>${amount}</td>
-            <td>
-              <button class="btn" onclick="toggleUsed(${id})">✅</button>
-              <button class="btn" onclick="deleteCoupon('${id}')">🗑️</button>
-            </td>
-          `;
-          tbody.appendChild(tr);
-        }
-        updateSummary(summary);
-      }).catch(err => alert('載入資料失敗：' + err.message));
+            const tr = document.createElement('tr');
+            if (used) tr.classList.add('used');
+            tr.classList.add(`member-${member}`);
+            tr.innerHTML = `
+              <td>${member}</td>
+              <td>${payment}</td>
+              <td>${amount}</td>
+              <td>
+                <button class="btn" onclick="toggleUsed('${id}')">✅</button>
+                <button class="btn" onclick="deleteCoupon('${id}')">🗑️</button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          }
+          updateSummary(summary);
+        })
+        .catch(err => {
+          console.error('載入錯誤:', err);
+          alert('載入資料失敗：' + err.message);
+        });
     }
 
     function updateSummary(summary) {
