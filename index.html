@@ -1,366 +1,101 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>消費獎賞2025 – 家庭紀錄表</title>
-  <style>
-    body {
-      font-family: "Segoe UI", sans-serif;
-      margin: 0;
-      padding: 1rem;
-      background-color: #f4f4f8;
-      color: #333;
-    }
-    h1, h2 {
-      text-align: center;
-    }
-    .summary-table, .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 1rem;
-    }
-    .summary-table th, .summary-table td,
-    .data-table th, .data-table td {
-      border: 1px solid #ccc;
-      padding: 0.5rem;
-      text-align: center;
-    }
-    .data-table tr.used {
-      text-decoration: line-through;
-      opacity: 0.6;
-    }
-    .btn {
-      font-size: 1.2rem;
-      padding: 0.4rem 0.8rem;
-      border: none;
-      border-radius: 0.4rem;
-      cursor: pointer;
-    }
-    .btn:hover {
-      opacity: 0.8;
-    }
-    .popup {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    .popup-content {
-      background: #fff;
-      padding: 2rem;
-      border-radius: 1rem;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
-      width: 90%;
-      max-width: 400px;
-    }
-    .popup-content label, select {
-      display: block;
-      margin-bottom: 1rem;
-      font-size: 1.2rem;
-      width: 100%;
-    }
-    .popup-content button {
-      font-size: 1.2rem;
-    }
-    .member-爸爸 { background-color: #cce5ff; }
-    .member-媽媽 { background-color: #ffd6e7; }
-    .member-家姐 { background-color: #d4edda; }
-    .member-昌哥 { background-color: #ffe5b4; }
-    .member-妹妹 { background-color: #e6ccff; }
-  </style>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-  <h1>消費獎賞2025 – 家庭紀錄表</h1>
-
-  <button class="btn" onclick="showPopup()">➕ 新增優惠券</button>
-
-  <div id="summary"></div>
-
-  <h2>每週記錄</h2>
-  <select id="weekSelect" onchange="loadDataForWeek()"></select>
-
-  <table class="data-table" id="couponTable">
-    <thead>
-      <tr>
-        <th>家庭成員</th>
-        <th>支付方式</th>
-        <th>金額</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="couponList"></tbody>
-  </table>
-
-  <!-- 彈出新增視窗 -->
-  <div class="popup" id="popup" style="display:none">
-    <div class="popup-content">
-      <h2>新增優惠券</h2>
-      <label>家庭成員：
-        <select id="member">
-          <option>爸爸</option><option>媽媽</option><option>家姐</option><option>昌哥</option><option>妹妹</option>
-        </select>
-      </label>
-      <label>支付方式：
-        <select id="payment">
-          <option>中銀</option><option>工商</option><option>國際</option><option>大豐</option><option>MPay</option><option>UEPay</option><option>支付寶(澳門)</option>
-        </select>
-      </label>
-      <label>金額 1：
-        <select id="amount1">
-          <option value="0">0</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-      </label>
-      <label>金額 2：
-        <select id="amount2">
-          <option value="0">0</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-      </label>
-      <label>金額 3：
-        <select id="amount3">
-          <option value="0">0</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-      </label>
-      <button onclick="addCoupon()" class="btn">✅ 新增</button>
-      <button onclick="hidePopup()" class="btn">❌ 關閉</button>
+  <div class="container">
+    <h1>消費獎賞2025 – 家庭紀錄表</h1>
+    <div id="errorMessage" style="color: red; display: none;"></div>
+    <div id="loading" class="spinner" style="display: none;"></div>
+    <div class="controls">
+      <button class="icon-button" onclick="openModal()">➕ 新增優惠券</button>
+      <select id="weekSelector"></select>
+      <button class="icon-button export-btn" onclick="exportToExcel()" title="匯出 Excel">
+        <img src="https://img.icons8.com/ios-filled/24/ffffff/download.png" alt="下載">
+      </button>
+      <select id="memberFilter">
+        <option value="">所有家庭成員</option>
+        <option value="爸爸">爸爸</option>
+        <option value="媽媽">媽媽</option>
+        <option value="家姐">家姐</option>
+        <option value="昌哥">昌哥</option>
+        <option value="妹妹">妹妹</option>
+      </select>
+      <select id="paymentFilter">
+        <option value="">所有支付方式</option>
+        <option value="中銀">中銀</option>
+        <option value="工商">工商</option>
+        <option value="國際">國際</option>
+        <option value="大豐">大豐</option>
+        <option value="MPay">MPay</option>
+        <option value="UEPay">UEPay</option>
+        <option value="支付寶(澳門)">支付寶(澳門)</option>
+      </select>
+    </div>
+    <div id="summaryTableContainer"></div>
+    <div id="tableContainer"></div>
+    <div id="entryModal" class="modal hidden">
+      <div class="modal-content">
+        <span class="close" onclick="closeModal()">❌</span>
+        <h2>新增優惠券</h2>
+        <form id="entryForm">
+          <label>家庭成員：</label>
+          <select id="member">
+            <option value="爸爸">爸爸</option>
+            <option value="媽媽">媽媽</option>
+            <option value="家姐">家姐</option>
+            <option value="昌哥">昌哥</option>
+            <option value="妹妹">妹妹</option>
+          </select>
+          <label>支付方式：</label>
+          <select id="payment">
+            <option value="中銀">中銀</option>
+            <option value="工商">工商</option>
+            <option value="國際">國際</option>
+            <option value="大豐">大豐</option>
+            <option value="MPay">MPay</option>
+            <option value="UEPay">UEPay</option>
+            <option value="支付寶(澳門)">支付寶(澳門)</option>
+          </select>
+          <label>金額 1：</label>
+          <select id="amount1">
+            <option value="0">0 元 (未抽中)</option>
+            <option value="10">10 元</option>
+            <option value="20">20 元</option>
+            <option value="50">50 元</option>
+            <option value="100">100 元</option>
+            <option value="200">200 元</option>
+          </select>
+          <label>金額 2：</label>
+          <select id="amount2">
+            <option value="0">0 元 (未抽中)</option>
+            <option value="10">10 元</option>
+            <option value="20">20 元</option>
+            <option value="50">50 元</option>
+            <option value="100">100 元</option>
+            <option value="200">200 元</option>
+          </select>
+          <label>金額 3：</label>
+          <select id="amount3">
+            <option value="0">0 元 (未抽中)</option>
+            <option value="10">10 元</option>
+            <option value="20">20 元</option>
+            <option value="50">50 元</option>
+            <option value="100">100 元</option>
+            <option value="200">200 元</option>
+          </select>
+          <button type="submit">✅ 新增</button>
+        </form>
+      </div>
     </div>
   </div>
-
-  <script>
-    console.log('Script loaded');
-    const firebaseConfig = {
-      apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
-      authDomain: "testing-a7aba.firebaseapp.com",
-      projectId: "testing-a7aba",
-      storageBucket: "testing-a7aba.appspot.com",
-      messagingSenderId: "94291975544",
-      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
-    };
-    const dbURL = "https://testing-a7aba-default-rtdb.firebaseio.com/";
-
-    let currentWeek = getWeekKey();
-    let coupons = {};
-
-    function getWeekKey(date = new Date()) {
-      const d = new Date(date);
-      d.setDate(d.getDate() - (d.getDay() || 7) + 1); // Set to Monday
-      const year = d.getFullYear();
-      const startOfYear = new Date(year, 0, 1);
-      const weekNumber = Math.ceil((((d - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
-      return `${year}-W${weekNumber}`;
-    }
-
-    function formatWeekLabel(date) {
-      const monday = new Date(date);
-      monday.setDate(monday.getDate() - (monday.getDay() || 7) + 1); // Set to Monday
-      const sunday = new Date(monday);
-      sunday.setDate(sunday.getDate() + 6); // Set to Sunday
-      const year = monday.getFullYear();
-      const weekNumber = Math.ceil((((monday - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
-      const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return `${formatDate(monday)} ~ ${formatDate(sunday)} (W${weekNumber})`;
-    }
-
-    function showPopup() {
-      document.getElementById('popup').style.display = 'flex';
-    }
-
-    function hidePopup() {
-      document.getElementById('popup').style.display = 'none';
-    }
-
-    function addCoupon() {
-      const member = document.getElementById('member').value;
-      const payment = document.getElementById('payment').value;
-      const amounts = [
-        parseInt(document.getElementById('amount1').value),
-        parseInt(document.getElementById('amount2').value),
-        parseInt(document.getElementById('amount3').value)
-      ].filter(a => a !== 0); // Exclude 0 values
-
-      if (amounts.length === 0) {
-        alert('請選擇至少一個非零金額');
-        return;
-      }
-
-      // Check existing coupons for this payment method in the current week
-      let existingCouponCount = 0;
-      for (let id in coupons) {
-        if (coupons[id].payment === payment && coupons[id].member === member) {
-          existingCouponCount++;
-        }
-      }
-
-      if (existingCouponCount + amounts.length > 3) {
-        alert(`此支付方式 (${payment}) 最多只能有3張優惠券，當前已有 ${existingCouponCount} 張`);
-        return;
-      }
-
-      // Add coupons to Firebase
-      const updates = {};
-      amounts.forEach(amount => {
-        const id = Date.now() + Math.random().toString(36).substr(2, 9);
-        updates[`/coupons/${currentWeek}/${id}`] = { member, payment, amount, used: false };
-      });
-
-      fetch(`${dbURL}.json`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates)
-      })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`新增失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(() => {
-          hidePopup();
-          loadDataForWeek();
-        })
-        .catch(err => {
-          console.error('新增錯誤:', err);
-          alert('新增失敗：' + err.message);
-        });
-    }
-
-    function toggleUsed(id) {
-      const current = coupons[id];
-      if (!current) {
-        alert('優惠券資料不存在');
-        return;
-      }
-      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...current, used: !current.used })
-      })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`切換狀態失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(() => loadDataForWeek())
-        .catch(err => {
-          console.error('切換狀態錯誤:', err);
-          alert('切換使用狀態失敗：' + err.message);
-        });
-    }
-
-    function deleteCoupon(id) {
-      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
-        method: 'DELETE'
-      })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`刪除失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(() => loadDataForWeek())
-        .catch(err => {
-          console.error('刪除錯誤:', err);
-          alert('刪除失敗：' + err.message);
-        });
-    }
-
-    function loadDataForWeek() {
-      currentWeek = document.getElementById('weekSelect').value || getWeekKey();
-      fetch(`${dbURL}/coupons/${currentWeek}.json`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`載入資料失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(data => {
-          console.log('載入資料:', data);
-          coupons = data || {};
-          const tbody = document.getElementById('couponList');
-          tbody.innerHTML = '';
-          const summary = {};
-          for (let id in coupons) {
-            const { member, payment, amount, used } = coupons[id];
-            summary[member] = summary[member] || {};
-            summary[member][payment] = summary[member][payment] || { total: 0, used: 0 };
-            summary[member][payment].total += amount;
-            if (used) summary[member][payment].used += amount;
-
-            const tr = document.createElement('tr');
-            if (used) tr.classList.add('used');
-            tr.classList.add(`member-${member}`);
-            tr.innerHTML = `
-              <td>${member}</td>
-              <td>${payment}</td>
-              <td>${amount}</td>
-              <td>
-                <button class="btn" onclick="toggleUsed('${id}')">✅</button>
-                <button class="btn" onclick="deleteCoupon('${id}')">🗑️</button>
-              </td>
-            `;
-            tbody.appendChild(tr);
-          }
-          updateSummary(summary);
-        })
-        .catch(err => {
-          console.error('載入錯誤:', err);
-          alert('載入資料失敗：' + err.message);
-        });
-    }
-
-    function updateSummary(summary) {
-      let html = '<table class="summary-table"><thead><tr><th>家庭成員</th><th>支付方式</th><th>可消費金額</th></tr></thead><tbody>';
-      let familyTotal = 0;
-      for (let member in summary) {
-        let memberTotal = 0;
-        for (let pay in summary[member]) {
-          const usable = (summary[member][pay].total - summary[member][pay].used) * 3;
-          html += `<tr><td>${member}</td><td>${pay}</td><td>${usable}</td></tr>`;
-          memberTotal += usable;
-        }
-        html += `<tr style="font-weight:bold"><td colspan="2">${member}合計</td><td>${memberTotal}</td></tr>`;
-        familyTotal += memberTotal;
-      }
-      html += `<tr style="font-weight:bold;background:#eee"><td colspan="2">全家合計</td><td>${familyTotal}</td></tr>`;
-      html += '</tbody></table>';
-      document.getElementById('summary').innerHTML = html;
-    }
-
-    function initWeekDropdown() {
-      const select = document.getElementById('weekSelect');
-      const startDate = new Date('2025-09-01'); // Monday of the week
-      const endDate = new Date('2025-11-30');
-      const oneWeek = 7 * 24 * 60 * 60 * 1000;
-
-      for (let d = new Date(startDate); d <= endDate; d.setTime(d.getTime() + oneWeek)) {
-        const key = getWeekKey(d);
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = formatWeekLabel(d);
-        if (key === getWeekKey(new Date())) opt.selected = true;
-        select.appendChild(opt);
-      }
-      loadDataForWeek();
-    }
-
-    window.onload = initWeekDropdown;
-  </script>
+  <script defer src="script.js"></script>
 </body>
 </html>
