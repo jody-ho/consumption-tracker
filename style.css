@@ -74,12 +74,11 @@ table th, table td {
   font-size: 14px;
 }
 
-.summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 16%; }
-.summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 20%; }
-.summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 24%; }
-.summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 24%; }
-.summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 24%; }
-.summary-table th:nth-child(6), .summary-table td:nth-child(6) { width: 8%; }
+.summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 18%; }
+.summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 22%; }
+.summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 20%; }
+.summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 20%; }
+.summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 20%; }
 
 table th {
   background-color: #f4f4f4;
@@ -91,12 +90,22 @@ table th {
 .member-昌哥 { background-color: #ffe6cc; }
 .member-妹妹 { background-color: #e6d0ff; }
 
-button.action-btn, button.group-action-btn {
+button.action-btn {
   background: none;
   border: none;
   font-size: 14px;
   cursor: pointer;
   margin: 0 2px;
+}
+
+.clickable-payment {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #0066cc;
+}
+
+.clickable-payment:hover {
+  color: #003366;
 }
 
 .used td:not(:last-child) {
@@ -197,7 +206,7 @@ button.action-btn, button.group-action-btn {
     flex-direction: column;
     align-items: stretch;
   }
-  #tableContainer, #summaryTableContainer {
+  #tableContainer {
     overflow-x: auto;
   }
   .export-btn {
@@ -206,10 +215,9 @@ button.action-btn, button.group-action-btn {
   table th, table td {
     width: auto;
   }
-  .summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 16%; }
-  .summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 20%; }
-  .summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 24%; }
-  .summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 24%; }
-  .summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 24%; }
-  .summary-table th:nth-child(6), .summary-table td:nth-child(6) { width: 6%; }
+  .summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 18%; }
+  .summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 22%; }
+  .summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 20%; }
+  .summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 20%; }
+  .summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 20%; }
 }
