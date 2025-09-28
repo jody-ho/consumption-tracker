@@ -69,17 +69,17 @@ table {
 
 table th, table td {
   border: 1px solid #ddd;
-  padding: 10px;
+  padding: 6px;
   text-align: center;
-  font-size: 16px;
+  font-size: 14px;
 }
 
-.summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 15%; }
+.summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 16%; }
 .summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 20%; }
-.summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 25%; }
-.summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 25%; }
-.summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 25%; }
-.summary-table th:nth-child(6), .summary-table td:nth-child(6) { width: 10%; }
+.summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 24%; }
+.summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 24%; }
+.summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 24%; }
+.summary-table th:nth-child(6), .summary-table td:nth-child(6) { width: 8%; }
 
 table th {
   background-color: #f4f4f4;
@@ -94,9 +94,9 @@ table th {
 button.action-btn, button.group-action-btn {
   background: none;
   border: none;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
-  margin: 0 5px;
+  margin: 0 2px;
 }
 
 .used td:not(:last-child) {
@@ -206,4 +206,10 @@ button.action-btn, button.group-action-btn {
   table th, table td {
     width: auto;
   }
+  .summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 16%; }
+  .summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 20%; }
+  .summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 24%; }
+  .summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 24%; }
+  .summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 24%; }
+  .summary-table th:nth-child(6), .summary-table td:nth-child(6) { width: 6%; }
 }
