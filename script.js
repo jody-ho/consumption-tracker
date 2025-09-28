@@ -287,7 +287,7 @@ function renderSummary(data) {
       grandTotal.consumable += consumable;
     }
   }
-  let html = `<table class="summary-table"><thead><tr><th>家庭成員</th><th>支付方式</th><th>可消費金額</th><th>支出金額</th><th>實際支出</th><th>操作</th></tr></thead><tbody>`;
+  let html = `<table class="summary-table"><thead><tr><th>家庭成員</th><th>支付方式</th><th>可消費金額</th><th>支出金額</th><th>實際支出</th></tr></thead><tbody>`;
   for (const [member, { payments, memberTotal }] of Object.entries(
     summary
   ).sort((a, b) => a[0].localeCompare(b[0]))) {
@@ -300,11 +300,10 @@ function renderSummary(data) {
             ? `<td rowspan="${rowSpan}" class="member-${member}">${member}</td>`
             : ""
         }
-        <td>${payment}</td>
+        <td class="clickable-payment" onclick="markGroupUsed('${member}', '${payment}', ${!allUsed})">${payment}</td>
         <td>${consumable}</td>
         <td>${spending}</td>
         <td>${actual}</td>
-        <td><button class="group-action-btn" onclick="markGroupUsed('${member}', '${payment}', ${!allUsed})">✅</button></td>
       </tr>`
     );
     rows.push(`
@@ -313,7 +312,6 @@ function renderSummary(data) {
         <td>${memberTotal.consumable}</td>
         <td>${memberTotal.spending}</td>
         <td>${memberTotal.actual}</td>
-        <td></td>
       </tr>
     `);
     html += rows.join("");
@@ -325,7 +323,6 @@ function renderSummary(data) {
         <td>${grandTotal.consumable}</td>
         <td>${grandTotal.spending}</td>
         <td>${grandTotal.actual}</td>
-        <td></td>
       </tr>`;
   }
   html += `</tbody></table>`;
