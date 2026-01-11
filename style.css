@@ -26,7 +26,7 @@ h1 {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 15px;
-  justify-content: center;
+  justify-content: space-between;
 }
 
 .icon-button {
@@ -43,6 +43,18 @@ h1 {
   background-color: #388E3C;
 }
 
+.export-btn {
+  margin-left: auto;
+  padding: 5px;
+  background-color: #4CAF50;
+  border-radius: 6px;
+}
+
+.export-btn img {
+  width: 24px;
+  height: 24px;
+}
+
 select, input[type="number"] {
   font-size: 18px;
   padding: 6px;
@@ -52,16 +64,23 @@ table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 15px;
+  table-layout: fixed;
 }
 
-th, td {
+table th, table td {
   border: 1px solid #ddd;
-  padding: 10px;
+  padding: 6px;
   text-align: center;
-  font-size: 16px;
+  font-size: 14px;
 }
 
-th {
+.summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 18%; }
+.summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 22%; }
+.summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 20%; }
+.summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 20%; }
+.summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 20%; }
+
+table th {
   background-color: #f4f4f4;
 }
 
@@ -74,11 +93,30 @@ th {
 button.action-btn {
   background: none;
   border: none;
-  font-size: 18px;
+  font-size: 14px;
   cursor: pointer;
+  margin: 0 2px;
 }
 
-/* Modal 相關樣式 */
+.clickable-payment {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #0066cc;
+}
+
+.clickable-payment:hover {
+  color: #003366;
+}
+
+.used td:not(:last-child) {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.summary-total {
+  font-weight: bold;
+}
+
 .modal {
   position: fixed;
   top: 0;
@@ -138,4 +176,48 @@ button.action-btn {
   float: right;
   font-size: 24px;
   cursor: pointer;
+}
+
+#errorMessage {
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #4CAF50;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+  margin: 10px auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #tableContainer {
+    overflow-x: auto;
+  }
+  .export-btn {
+    margin-left: 0;
+  }
+  table th, table td {
+    width: auto;
+  }
+  .summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 18%; }
+  .summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 22%; }
+  .summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 20%; }
+  .summary-table th:nth-child(4), .summary-table td:nth-child(4) { width: 20%; }
+  .summary-table th:nth-child(5), .summary-table td:nth-child(5) { width: 20%; }
 }
