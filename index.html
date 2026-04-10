@@ -1,366 +1,270 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" style="font-size: 18px;">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>消費獎賞2025 – 家庭紀錄表</title>
-  <style>
-    body {
-      font-family: "Segoe UI", sans-serif;
-      margin: 0;
-      padding: 1rem;
-      background-color: #f4f4f8;
-      color: #333;
-    }
-    h1, h2 {
-      text-align: center;
-    }
-    .summary-table, .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 1rem;
-    }
-    .summary-table th, .summary-table td,
-    .data-table th, .data-table td {
-      border: 1px solid #ccc;
-      padding: 0.5rem;
-      text-align: center;
-    }
-    .data-table tr.used {
-      text-decoration: line-through;
-      opacity: 0.6;
-    }
-    .btn {
-      font-size: 1.2rem;
-      padding: 0.4rem 0.8rem;
-      border: none;
-      border-radius: 0.4rem;
-      cursor: pointer;
-    }
-    .btn:hover {
-      opacity: 0.8;
-    }
-    .popup {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    .popup-content {
-      background: #fff;
-      padding: 2rem;
-      border-radius: 1rem;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
-      width: 90%;
-      max-width: 400px;
-    }
-    .popup-content label, select {
-      display: block;
-      margin-bottom: 1rem;
-      font-size: 1.2rem;
-      width: 100%;
-    }
-    .popup-content button {
-      font-size: 1.2rem;
-    }
-    .member-爸爸 { background-color: #cce5ff; }
-    .member-媽媽 { background-color: #ffd6e7; }
-    .member-家姐 { background-color: #d4edda; }
-    .member-昌哥 { background-color: #ffe5b4; }
-    .member-妹妹 { background-color: #e6ccff; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2026 消費獎賞助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background-color: #f1f5f9; color: #1e293b; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .member-btn.active { background-color: #0f172a !important; color: white !important; }
+        
+        .data-table { width: 100%; border-collapse: collapse; background: white; table-layout: fixed; }
+        .data-table th { background: #f8fafc; color: #64748b; font-size: 13px; padding: 12px 4px; border-bottom: 2px solid #e2e8f0; text-align: center; }
+        .data-table td { padding: 12px 4px; border-bottom: 1px solid #f1f5f9; font-size: 16px; text-align: center; vertical-align: middle; line-height: 1.2; overflow: hidden; }
+        
+        .clickable-cell { cursor: pointer; transition: background 0.2s; }
+        .clickable-cell:active { background-color: #f1f5f9; }
+        
+        .subtotal-row { background-color: #f8fafc; font-weight: bold; cursor: pointer; }
+        .grand-total-row { background-color: #0f172a !important; color: white !important; font-weight: 900; cursor: pointer; }
+
+        .line-through { text-decoration: line-through; opacity: 0.4; }
+        .text-used { font-size: 11px; font-weight: normal; }
+
+        .bg-爸爸 { background-color: #3b82f6; } .text-爸爸 { color: #3b82f6; }
+        .bg-媽媽 { background-color: #ec4899; } .text-媽媽 { color: #ec4899; }
+        .bg-姐姐 { background-color: #10b981; } .text-姐姐 { color: #10b981; }
+        .bg-昌哥 { background-color: #f59e0b; } .text-昌哥 { color: #f59e0b; }
+        .bg-妹妹 { background-color: #8b5cf6; } .text-妹妹 { color: #8b5cf6; }
+
+        #smartFab { position: fixed; right: 20px; bottom: 120px; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); z-index: 100; }
+        #calculatorModal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.8); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+        .slot-active { border-color: #0f172a !important; background-color: #fff !important; box-shadow: 0 0 0 2px #0f172a; }
+    </style>
 </head>
-<body>
-  <h1>消費獎賞2025 – 家庭紀錄表</h1>
+<body class="pb-32">
 
-  <button class="btn" onclick="showPopup()">➕ 新增優惠券</button>
+    <div class="max-w-md mx-auto">
+        <header class="bg-white sticky top-0 z-50 p-4 shadow-sm flex items-center justify-between">
+            <select id="weekDropdown" onchange="changeWeek(this.value)" class="font-black text-slate-800 bg-transparent outline-none flex-1 text-base"></select>
+            <button onclick="toggleZoom()" class="bg-slate-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-slate-500 uppercase">A±</button>
+        </header>
 
-  <div id="summary"></div>
+        <div id="tab-redeem" class="tab-content active p-4 space-y-4">
+            <section class="bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden">
+                <div class="bg-emerald-600 p-3 text-white text-center text-[10px] font-bold tracking-widest uppercase">本週數據匯總</div>
+                <table class="data-table">
+                    <thead><tr><th class="w-16">成員</th><th class="w-20">平台</th><th>面額</th><th>需消費</th></tr></thead>
+                    <tbody id="redeemTableBody"></tbody>
+                    <tfoot id="redeemTableFoot"></tfoot>
+                </table>
+            </section>
+            <button id="smartFab" onclick="toggleCalc(true)" class="bg-rose-600 text-white shadow-rose-500/50">🛒</button>
+            <div id="calculatorModal" onclick="if(event.target===this) toggleCalc(false)">
+                <div class="bg-slate-900 w-full rounded-3xl p-6 shadow-2xl space-y-4" onclick="event.stopPropagation()">
+                    <div class="flex justify-between items-center text-white"><h3 class="font-black">智能湊券</h3><button onclick="toggleCalc(false)" class="text-slate-400">關閉</button></div>
+                    <input type="number" id="billAmount" oninput="runSmartMatch()" placeholder="輸入總額..." class="w-full bg-slate-800 border-none rounded-2xl py-4 text-3xl font-black text-rose-400 outline-none text-center">
+                    <div id="smartResult" class="hidden bg-slate-800/50 rounded-2xl p-4 border border-white/5">
+                        <div id="smartPlanList" class="space-y-1 mb-3 text-xs text-slate-300 border-b border-white/10 pb-2"></div>
+                        <div class="flex justify-between items-center"><span class="text-xs text-slate-400">實付:</span><span id="predictPay" class="text-2xl font-black text-emerald-400">0</span></div>
+                        <button onclick="applySmartRedeem()" class="w-full bg-rose-600 py-3 rounded-xl font-black text-sm mt-3 text-white">確認使用</button>
+                    </div>
+                </div>
+            </div>
+            <details class="mt-4" open>
+                <summary class="text-center text-[10px] font-black text-slate-400 py-2 cursor-pointer uppercase tracking-widest">核銷明細</summary>
+                <div id="individualList" class="space-y-2 mt-2"></div>
+            </details>
+        </div>
 
-  <h2>每週記錄</h2>
-  <select id="weekSelect" onchange="loadDataForWeek()"></select>
+        <div id="tab-stat" class="tab-content p-4 space-y-5">
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-3xl text-white shadow-lg"><p class="text-[10px] font-bold opacity-80 uppercase">🏆 手氣王</p><p id="luckyKing" class="text-xl font-black">--</p></div>
+                <div class="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-3xl text-white shadow-lg"><p class="text-[10px] font-bold opacity-80 uppercase">💎 最強平台</p><p id="topPlatform" class="text-xl font-black">--</p></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-white p-4 rounded-3xl border border-slate-200 text-center"><p class="text-[10px] font-bold text-slate-400 uppercase">總抽到</p><p id="statTotalDrawn" class="text-2xl font-black text-slate-800">0</p></div>
+                <div class="bg-white p-4 rounded-3xl border border-emerald-100 text-center"><p class="text-[10px] font-bold text-emerald-600 uppercase">累計已用</p><p id="statUsedAmt" class="text-2xl font-black text-emerald-600">0</p></div>
+            </div>
+            <div class="flex justify-between items-center px-1">
+                <h3 class="font-black text-slate-800">📊 財務總表</h3>
+                <select id="statMode" onchange="updateStatsUI()" class="text-xs font-bold bg-white border px-2 py-1 rounded-lg outline-none">
+                    <option value="week">本週</option><option value="grand">全期</option>
+                </select>
+            </div>
+            <section class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                <table class="data-table">
+                    <thead><tr><th class="w-14">成員</th><th class="w-16">平台</th><th class="w-16">已用</th><th>剩餘(需)</th><th class="w-18">已付</th></tr></thead>
+                    <tbody id="memberTableBody"></tbody>
+                    <tfoot id="tableGrandTotal"></tfoot>
+                </table>
+            </section>
+        </div>
 
-  <table class="data-table" id="couponTable">
-    <thead>
-      <tr>
-        <th>家庭成員</th>
-        <th>支付方式</th>
-        <th>金額</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="couponList"></tbody>
-  </table>
+        <div id="tab-input" class="tab-content p-4 space-y-6">
+            <section class="bg-white rounded-3xl p-5 shadow-sm border space-y-4">
+                <div class="grid grid-cols-5 gap-1.5">
+                    <button onclick="selectUser('爸爸', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100 active">爸爸</button>
+                    <button onclick="selectUser('媽媽', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">媽媽</button>
+                    <button onclick="selectUser('姐姐', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">姐姐</button>
+                    <button onclick="selectUser('昌哥', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">昌哥</button>
+                    <button onclick="selectUser('妹妹', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">妹妹</button>
+                </div>
+                <select id="platformSelect" class="w-full p-4 rounded-xl bg-slate-50 border border-slate-200 font-black text-base outline-none">
+                    <option>MPay</option><option>中銀</option><option>工銀</option><option>大豐</option><option>國際</option><option>支付寶</option><option>UEPay</option>
+                </select>
+            </section>
+            
+            <section class="space-y-3">
+                <div class="flex gap-3">
+                    <div class="flex-1 flex flex-col gap-2"><div id="slot-0" onclick="activeSlot=0; updateSlotUI()" class="py-6 border-2 border-slate-200 rounded-2xl text-center font-black text-2xl bg-white">0</div><button onclick="clearSlot(0)" class="text-[10px] py-1.5 bg-slate-200 text-slate-500 rounded-lg font-bold">清除</button></div>
+                    <div class="flex-1 flex flex-col gap-2"><div id="slot-1" onclick="activeSlot=1; updateSlotUI()" class="py-6 border-2 border-slate-200 rounded-2xl text-center font-black text-2xl bg-white">0</div><button onclick="clearSlot(1)" class="text-[10px] py-1.5 bg-slate-200 text-slate-500 rounded-lg font-bold">清除</button></div>
+                    <div class="flex-1 flex flex-col gap-2"><div id="slot-2" onclick="activeSlot=2; updateSlotUI()" class="py-6 border-2 border-slate-200 rounded-2xl text-center font-black text-2xl bg-white">0</div><button onclick="clearSlot(2)" class="text-[10px] py-1.5 bg-slate-200 text-slate-500 rounded-lg font-bold">清除</button></div>
+                </div>
+            </section>
 
-  <!-- 彈出新增視窗 -->
-  <div class="popup" id="popup" style="display:none">
-    <div class="popup-content">
-      <h2>新增優惠券</h2>
-      <label>家庭成員：
-        <select id="member">
-          <option>爸爸</option><option>媽媽</option><option>家姐</option><option>昌哥</option><option>妹妹</option>
-        </select>
-      </label>
-      <label>支付方式：
-        <select id="payment">
-          <option>中銀</option><option>工商</option><option>國際</option><option>大豐</option><option>MPay</option><option>UEPay</option>
-        </select>
-      </label>
-      <label>金額 1：
-        <select id="amount1">
-          <option value="0">0</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-      </label>
-      <label>金額 2：
-        <select id="amount2">
-          <option value="0">0</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-      </label>
-      <label>金額 3：
-        <select id="amount3">
-          <option value="0">0</option>
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-      </label>
-      <button onclick="addCoupon()" class="btn">✅ 新增</button>
-      <button onclick="hidePopup()" class="btn">❌ 關閉</button>
+            <div class="grid grid-cols-3 gap-3">
+                <button onclick="setSlotValue(10)" class="bg-white border py-4 rounded-2xl font-black text-xl active:bg-slate-50">10</button>
+                <button onclick="setSlotValue(20)" class="bg-white border py-4 rounded-2xl font-black text-xl active:bg-slate-50">20</button>
+                <button onclick="setSlotValue(50)" class="bg-white border py-4 rounded-2xl font-black text-xl active:bg-slate-50">50</button>
+                <button onclick="setSlotValue(100)" class="bg-amber-50 border-amber-200 py-4 rounded-2xl font-black text-xl text-amber-600 active:bg-amber-100">100</button>
+                <button onclick="setSlotValue(200)" class="bg-rose-50 border-rose-200 py-4 rounded-2xl font-black text-xl text-rose-600 active:bg-rose-100">200</button>
+            </div>
+
+            <button onclick="submitBatch()" class="w-full bg-slate-800 text-white py-5 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-all">📥 登記獎賞</button>
+        </div>
+
+        <nav class="fixed bottom-0 left-0 right-0 h-24 bg-white border-t flex justify-around items-center z-50 shadow-2xl">
+            <button onclick="switchTab('redeem')" id="nav-redeem" class="flex-1 flex flex-col items-center font-bold text-sm text-rose-600"><span class="text-2xl mb-1">🛒</span>使用</button>
+            <button onclick="switchTab('input')" id="nav-input" class="flex-1 flex flex-col items-center font-bold text-sm text-slate-400"><span class="text-2xl mb-1">📥</span>登記</button>
+            <button onclick="switchTab('stat')" id="nav-stat" class="flex-1 flex flex-col items-center font-bold text-sm text-slate-400"><span class="text-2xl mb-1">📊</span>帳目</button>
+        </nav>
     </div>
-  </div>
 
-  <script>
-    console.log('Script loaded');
-    const firebaseConfig = {
-      apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
-      authDomain: "testing-a7aba.firebaseapp.com",
-      projectId: "testing-a7aba",
-      storageBucket: "testing-a7aba.appspot.com",
-      messagingSenderId: "94291975544",
-      appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
-    };
-    const dbURL = "https://testing-a7aba-default-rtdb.firebaseio.com/";
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
+            authDomain: "testing-a7aba.firebaseapp.com",
+            projectId: "testing-a7aba",
+            databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/",
+            appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-    let currentWeek = getWeekKey();
-    let coupons = {};
-
-    function getWeekKey(date = new Date()) {
-      const d = new Date(date);
-      d.setDate(d.getDate() - (d.getDay() || 7) + 1); // Set to Monday
-      const year = d.getFullYear();
-      const startOfYear = new Date(year, 0, 1);
-      const weekNumber = Math.ceil((((d - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
-      return `${year}-W${weekNumber}`;
-    }
-
-    function formatWeekLabel(date) {
-      const monday = new Date(date);
-      monday.setDate(monday.getDate() - (monday.getDay() || 7) + 1); // Set to Monday
-      const sunday = new Date(monday);
-      sunday.setDate(sunday.getDate() + 6); // Set to Sunday
-      const year = monday.getFullYear();
-      const weekNumber = Math.ceil((((monday - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7);
-      const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return `${formatDate(monday)} ~ ${formatDate(sunday)} (W${weekNumber})`;
-    }
-
-    function showPopup() {
-      document.getElementById('popup').style.display = 'flex';
-    }
-
-    function hidePopup() {
-      document.getElementById('popup').style.display = 'none';
-    }
-
-    function addCoupon() {
-      const member = document.getElementById('member').value;
-      const payment = document.getElementById('payment').value;
-      const amounts = [
-        parseInt(document.getElementById('amount1').value),
-        parseInt(document.getElementById('amount2').value),
-        parseInt(document.getElementById('amount3').value)
-      ].filter(a => a !== 0); // Exclude 0 values
-
-      if (amounts.length === 0) {
-        alert('請選擇至少一個非零金額');
-        return;
-      }
-
-      // Check existing coupons for this payment method in the current week
-      let existingCouponCount = 0;
-      for (let id in coupons) {
-        if (coupons[id].payment === payment && coupons[id].member === member) {
-          existingCouponCount++;
+        const MEMBERS = ['爸爸', '媽媽', '姐姐', '昌哥', '妹妹'];
+        const WEEK_DATA = [];
+        const START_DATE = new Date('2026-04-10');
+        for(let i=0; i<10; i++){
+            let s = new Date(START_DATE); s.setDate(s.getDate() + i*7);
+            let e = new Date(s); e.setDate(e.getDate() + 6);
+            WEEK_DATA.push({ id:i+1, key:`2026-W${i+1}`, range:`${s.getMonth()+1}/${s.getDate()}-${e.getMonth()+1}/${e.getDate()}` });
         }
-      }
+        let currentWeekKey = WEEK_DATA[0].key;
+        let currentUser = '爸爸';
+        let activeSlot = 0;
+        let slotValues = [0,0,0];
+        let allCoupons = {};
+        const validWeekKeys = WEEK_DATA.map(w => w.key);
 
-      if (existingCouponCount + amounts.length > 3) {
-        alert(`此支付方式 (${payment}) 最多只能有3張優惠券，當前已有 ${existingCouponCount} 張`);
-        return;
-      }
-
-      // Add coupons to Firebase
-      const updates = {};
-      amounts.forEach(amount => {
-        const id = Date.now() + Math.random().toString(36).substr(2, 9);
-        updates[`/coupons/${currentWeek}/${id}`] = { member, payment, amount, used: false };
-      });
-
-      fetch(`${dbURL}.json`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates)
-      })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`新增失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(() => {
-          hidePopup();
-          loadDataForWeek();
-        })
-        .catch(err => {
-          console.error('新增錯誤:', err);
-          alert('新增失敗：' + err.message);
-        });
-    }
-
-    function toggleUsed(id) {
-      const current = coupons[id];
-      if (!current) {
-        alert('優惠券資料不存在');
-        return;
-      }
-      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
-        method: 'PUT',
-        body: JSON.stringify({ ...current, used: !current.used })
-      })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`切換狀態失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(() => loadDataForWeek())
-        .catch(err => {
-          console.error('切換狀態錯誤:', err);
-          alert('切換使用狀態失敗：' + err.message);
-        });
-    }
-
-    function deleteCoupon(id) {
-      fetch(`${dbURL}/coupons/${currentWeek}/${id}.json`, {
-        method: 'DELETE'
-      })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`刪除失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(() => loadDataForWeek())
-        .catch(err => {
-          console.error('刪除錯誤:', err);
-          alert('刪除失敗：' + err.message);
-        });
-    }
-
-    function loadDataForWeek() {
-      currentWeek = document.getElementById('weekSelect').value || getWeekKey();
-      fetch(`${dbURL}/coupons/${currentWeek}.json`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`載入資料失敗，伺服器回應錯誤: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(data => {
-          console.log('載入資料:', data);
-          coupons = data || {};
-          const tbody = document.getElementById('couponList');
-          tbody.innerHTML = '';
-          const summary = {};
-          for (let id in coupons) {
-            const { member, payment, amount, used } = coupons[id];
-            summary[member] = summary[member] || {};
-            summary[member][payment] = summary[member][payment] || { total: 0, used: 0 };
-            summary[member][payment].total += amount;
-            if (used) summary[member][payment].used += amount;
-
-            const tr = document.createElement('tr');
-            if (used) tr.classList.add('used');
-            tr.classList.add(`member-${member}`);
-            tr.innerHTML = `
-              <td>${member}</td>
-              <td>${payment}</td>
-              <td>${amount}</td>
-              <td>
-                <button class="btn" onclick="toggleUsed('${id}')">✅</button>
-                <button class="btn" onclick="deleteCoupon('${id}')">🗑️</button>
-              </td>
-            `;
-            tbody.appendChild(tr);
-          }
-          updateSummary(summary);
-        })
-        .catch(err => {
-          console.error('載入錯誤:', err);
-          alert('載入資料失敗：' + err.message);
-        });
-    }
-
-    function updateSummary(summary) {
-      let html = '<table class="summary-table"><thead><tr><th>家庭成員</th><th>支付方式</th><th>可消費金額</th></tr></thead><tbody>';
-      let familyTotal = 0;
-      for (let member in summary) {
-        let memberTotal = 0;
-        for (let pay in summary[member]) {
-          const usable = (summary[member][pay].total - summary[member][pay].used) * 3;
-          html += `<tr><td>${member}</td><td>${pay}</td><td>${usable}</td></tr>`;
-          memberTotal += usable;
+        function updateSummaryTable() {
+            const wkData = allCoupons[currentWeekKey] || {};
+            const res = {}; MEMBERS.forEach(m => res[m] = { platforms: {} });
+            let gFaceRem = 0, gFaceUsed = 0;
+            Object.values(wkData).forEach(c => {
+                const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
+                if(!res[m].platforms[c.payment]) res[m].platforms[c.payment] = { rem: 0, used: 0 };
+                if(c.used) { res[m].platforms[c.payment].used += c.amount; gFaceUsed += c.amount; }
+                else { res[m].platforms[c.payment].rem += c.amount; gFaceRem += c.amount; }
+            });
+            let bodyHtml = "";
+            MEMBERS.forEach(m => {
+                const pKeys = Object.keys(res[m].platforms); if(pKeys.length === 0) return;
+                let mRem = 0, mUsed = 0;
+                pKeys.forEach((p, idx) => {
+                    const d = res[m].platforms[p]; mRem += d.rem; mUsed += d.used;
+                    const isFullyUsed = d.rem === 0;
+                    bodyHtml += `<tr>${idx === 0 ? `<td rowspan="${pKeys.length + 1}" class="font-bold text-${m} border-r clickable-cell" onclick="bulkToggle('${m}')">${m}</td>` : ''}<td class="text-slate-500 border-r text-xs clickable-cell ${isFullyUsed?'line-through':''}" onclick="bulkToggle('${m}', '${p}')">${p}</td><td class="font-mono ${isFullyUsed?'line-through':''}">${d.rem > 0 ? d.rem : ''}${d.used > 0 ? `<div class="text-used text-slate-400 line-through">(${d.used})</div>` : ''}</td><td class="font-mono text-slate-400 text-xs ${isFullyUsed?'line-through':''}">${d.rem > 0 ? d.rem*3 : ''}</td></tr>`;
+                });
+                bodyHtml += `<tr class="subtotal-row" onclick="bulkToggle('${m}')"><td class="text-[10px] text-slate-400 border-r">${m} 總計</td><td class="font-mono">${mRem > 0 ? mRem : ''}${mUsed > 0 ? `<div class="text-used line-through">(${mUsed})</div>` : ''}</td><td class="font-mono text-slate-500">${mRem > 0 ? mRem*3 : ''}</td></tr>`;
+            });
+            document.getElementById('redeemTableBody').innerHTML = bodyHtml || '<tr><td colspan="4" class="py-10 text-slate-400">本週暫無數據</td></tr>';
+            document.getElementById('redeemTableFoot').innerHTML = (gFaceRem+gFaceUsed)>0 ? `<tr class="grand-total-row" onclick="bulkToggle()"><td colspan="2" class="text-xs">全家總計</td><td class="font-mono">${gFaceRem>0?gFaceRem:''} <div class="text-used opacity-60 line-through">(${gFaceUsed})</div></td><td class="font-mono text-emerald-400">${gFaceRem>0?gFaceRem*3:''}</td></tr>` : '';
+            
+            let listHtml = ""; Object.keys(wkData).sort((a,b)=>wkData[a].used - wkData[b].used).forEach(id => {
+                const c = wkData[id]; const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
+                listHtml += `<div class="flex items-center justify-between bg-white p-3 rounded-xl border ${c.used ? 'opacity-30' : ''}"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-${m} text-white flex items-center justify-center text-[10px] font-bold">${m[0]}</div><div class="text-sm font-bold">${c.payment} <span class="${c.used?'line-through':''}">${c.amount}</span></div></div><button onclick="toggleCoupon('${id}')" class="px-3 py-1 bg-slate-100 rounded-lg text-[10px] font-bold">${c.used?'還原':'核銷'}</button></div>`;
+            });
+            document.getElementById('individualList').innerHTML = listHtml || '<p class="text-center text-slate-400 py-4">無明細</p>';
         }
-        html += `<tr style="font-weight:bold"><td colspan="2">${member}合計</td><td>${memberTotal}</td></tr>`;
-        familyTotal += memberTotal;
-      }
-      html += `<tr style="font-weight:bold;background:#eee"><td colspan="2">全家合計</td><td>${familyTotal}</td></tr>`;
-      html += '</tbody></table>';
-      document.getElementById('summary').innerHTML = html;
-    }
 
-    function initWeekDropdown() {
-      const select = document.getElementById('weekSelect');
-      const startDate = new Date('2025-04-14'); // Monday of the week containing April 17
-      const endDate = new Date('2025-06-01');
-      const oneWeek = 7 * 24 * 60 * 60 * 1000;
+        function updateStatsUI() {
+            const mode = document.getElementById('statMode').value; const res = { totalDrawn: 0, usedAmt: 0, members: {}, platforms: {} };
+            MEMBERS.forEach(m => res.members[m] = { val: 0, platforms: {} });
+            Object.keys(allCoupons).forEach(wk => {
+                if (mode === 'week' && wk !== currentWeekKey) return;
+                if (mode === 'grand' && !validWeekKeys.includes(wk)) return;
+                Object.values(allCoupons[wk]).forEach(c => {
+                    const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member; const p = c.payment; const amt = parseFloat(c.amount) || 0;
+                    res.totalDrawn += amt; res.members[m].val += amt; if(!res.platforms[p]) res.platforms[p] = 0; res.platforms[p] += amt;
+                    if(!res.members[m].platforms[p]) res.members[m].platforms[p] = { rem: 0, used: 0, real: 0 };
+                    if(c.used) { res.usedAmt += amt; res.members[m].platforms[p].used += amt; res.members[m].platforms[p].real += parseFloat(c.realPayPart || (amt * 2)); }
+                    else { res.members[m].platforms[p].rem += amt; }
+                });
+            });
+            let king = "--", topP = "--", maxM = 0, maxP = 0;
+            MEMBERS.forEach(m => { if(res.members[m].val > maxM) { maxM = res.members[m].val; king = `${m} (${maxM})`; } });
+            Object.keys(res.platforms).forEach(p => { if(res.platforms[p] > maxP) { maxP = res.platforms[p]; topP = `${p} (${maxP})`; } });
+            document.getElementById('luckyKing').innerText = king; document.getElementById('topPlatform').innerText = topP;
+            document.getElementById('statTotalDrawn').innerText = res.totalDrawn; document.getElementById('statUsedAmt').innerText = res.usedAmt;
+            let tableHtml = ""; let gRem = 0, gUsed = 0, gReal = 0;
+            MEMBERS.forEach(m => {
+                let mRem = 0, mUsed = 0, mReal = 0; const pKeys = Object.keys(res.members[m].platforms); if (pKeys.length === 0) return;
+                pKeys.forEach((p, idx) => {
+                    const d = res.members[m].platforms[p]; mRem += d.rem; mUsed += d.used; mReal += d.real;
+                    tableHtml += `<tr>${idx===0?`<td rowspan="${pKeys.length + 1}" class="font-bold text-${m} border-r">${m}</td>`:''}<td class="text-slate-500 border-r text-xs">${p}</td><td class="border-r font-mono">${d.used}</td><td class="border-r font-mono font-bold">${d.rem}<div class="text-[10px] font-normal text-slate-400">需${d.rem*3}</div></td><td class="text-emerald-600 font-black font-mono">${Math.round(d.real)}</td></tr>`;
+                });
+                tableHtml += `<tr class="subtotal-row"><td class="text-[10px] text-slate-400 border-r">${m} 小計</td><td class="border-r font-mono">${mUsed}</td><td class="border-r font-mono">${mRem}<div class="text-[10px] font-normal">需${mRem*3}</div></td><td class="text-emerald-700 font-mono">${Math.round(mReal)}</td></tr>`;
+                gRem += mRem; gUsed += mUsed; gReal += mReal;
+            });
+            document.getElementById('memberTableBody').innerHTML = tableHtml || '<tr><td colspan="5" class="py-10">無數據</td></tr>';
+            document.getElementById('tableGrandTotal').innerHTML = `<tr class="grand-total-row"><td colspan="2" class="text-xs">全家總計</td><td class="font-mono">${gUsed}</td><td class="font-mono">${gRem}<div class="text-[10px] font-normal opacity-60">需${gRem*3}</div></td><td class="text-emerald-400 text-xl font-mono">${Math.round(gReal)}</td></tr>`;
+        }
 
-      for (let d = new Date(startDate); d <= endDate; d.setTime(d.getTime() + oneWeek)) {
-        const key = getWeekKey(d);
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = formatWeekLabel(d);
-        if (key === getWeekKey(new Date())) opt.selected = true;
-        select.appendChild(opt);
-      }
-      loadDataForWeek();
-    }
-
-    window.onload = initWeekDropdown;
-  </script>
+        function toggleCalc(show) { document.getElementById('calculatorModal').style.display = show ? 'flex' : 'none'; }
+        function selectUser(n, b) { currentUser = n; document.querySelectorAll('.member-btn').forEach(btn => btn.classList.remove('active')); b.classList.add('active'); }
+        function setSlotValue(v) { slotValues[activeSlot] = v; activeSlot = (activeSlot + 1) % 3; updateSlotUI(); }
+        function clearSlot(idx) { slotValues[idx] = 0; updateSlotUI(); }
+        function updateSlotUI() { slotValues.forEach((v, i) => { const el = document.getElementById(`slot-${i}`); el.innerText = v; el.className = `py-6 border-2 rounded-2xl text-center font-black text-2xl transition-all ${v>0 ? 'border-slate-800 bg-white' : 'border-slate-200 bg-slate-50'} ${i === activeSlot ? 'slot-active' : ''}`; }); }
+        function switchTab(t) { document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); document.querySelectorAll('nav button').forEach(b => b.classList.replace('text-rose-600', 'text-slate-400')); document.getElementById('tab-'+t).classList.add('active'); document.getElementById('nav-'+t).classList.replace('text-slate-400', 'text-rose-600'); }
+        function changeWeek(v) { currentWeekKey = v; updateSummaryTable(); updateStatsUI(); }
+        function toggleZoom() { document.documentElement.style.fontSize = document.documentElement.style.fontSize === '22px' ? '18px' : '22px'; }
+        function toggleCoupon(id) { const c = allCoupons[currentWeekKey][id]; const ns = !c.used; db.ref(`coupons/${currentWeekKey}/${id}`).update({ used: ns, realPayPart: ns ? (c.amount * 2) : 0, billAmount: ns ? (c.amount * 3) : 0 }); }
+        function submitBatch() { 
+            const p = document.getElementById('platformSelect').value; const vals = slotValues.filter(v=>v>0); if(vals.length===0) return;
+            vals.forEach((amt, i) => db.ref(`coupons/${currentWeekKey}/${Date.now()+i}`).set({ amount:amt, member:currentUser, payment:p, used:false }));
+            slotValues=[0,0,0]; activeSlot=0; updateSlotUI(); 
+            const b = document.querySelector('#tab-input .bg-slate-800'); b.innerText = "成功 ✓"; setTimeout(() => b.innerText = "📥 登記獎賞", 1000);
+        }
+        function bulkToggle(tm = null, tp = null) {
+            const wkData = allCoupons[currentWeekKey] || {}; const group = [];
+            Object.keys(wkData).forEach(id => { const c = wkData[id]; const m = (c.member==='家姐'||c.member==='姐')?'姐姐':c.member; if((!tm||m===tm)&&(!tp||c.payment===tp)) group.push({id, used:c.used, amt:c.amount}); });
+            if (!group.length || !confirm(`變更狀態？`)) return; const ns = !group.every(i=>i.used);
+            group.forEach(i => db.ref(`coupons/${currentWeekKey}/${i.id}`).update({ used:ns, realPayPart:ns?(i.amt*2):0, billAmount:ns?(i.amt*3):0 }));
+        }
+        function runSmartMatch() {
+            const bill = parseFloat(document.getElementById('billAmount').value) || 0; const resArea = document.getElementById('smartResult'); if (bill <= 0) { resArea.classList.add('hidden'); return; } resArea.classList.remove('hidden');
+            const av = []; Object.values(allCoupons[currentWeekKey] || {}).forEach((c, i) => { if (!c.used) av.push({ id: Object.keys(allCoupons[currentWeekKey])[i], ...c }); }); av.sort((a,b) => b.amount - a.amount);
+            let s3 = 0, fs = 0; let matched = []; let html = "";
+            for (let item of av) { if (s3 + (item.amount * 3) <= bill) { s3 += (item.amount * 3); fs += item.amount; matched.push(item); html += `<div class="flex justify-between"><span>${item.member}(${item.payment})</span><span class="font-bold">${item.amount}</span></div>`; } }
+            document.getElementById('smartPlanList').innerHTML = html || '無匹配'; document.getElementById('predictPay').innerText = (bill - fs).toFixed(1); window.tempMatched = matched;
+        }
+        function applySmartRedeem() {
+            const bill = parseFloat(document.getElementById('billAmount').value); if (!window.tempMatched || !window.tempMatched.length) return;
+            const tf = window.tempMatched.reduce((a,b)=>a+b.amount, 0); const tr = bill - tf;
+            window.tempMatched.forEach(item => { db.ref(`coupons/${currentWeekKey}/${item.id}`).update({ used: true, billAmount: bill, realPayPart: (item.amount/tf)*tr }); });
+            toggleCalc(false); document.getElementById('billAmount').value = '';
+        }
+        db.ref('coupons').on('value', s => { allCoupons = s.val() || {}; updateSummaryTable(); updateStatsUI(); });
+        window.onload = () => {
+            const drp = document.getElementById('weekDropdown'); WEEK_DATA.forEach(w => { const opt = document.createElement('option'); opt.value = w.key; opt.textContent = `2026 第 ${w.id} 週 (${w.range})`; drp.appendChild(opt); });
+            updateSlotUI();
+        };
+    </script>
 </body>
 </html>
