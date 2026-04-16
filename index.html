@@ -35,6 +35,26 @@
         #smartFab { position: fixed; right: 20px; bottom: 120px; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); z-index: 100; }
         #calculatorModal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.8); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
         .slot-active { border-color: #0f172a !important; background-color: #fff !important; box-shadow: 0 0 0 2px #0f172a; }
+    
+        .filter-chip { 
+            flex: 0 0 auto; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: bold; 
+            border: 1.5px solid #e2e8f0; color: #64748b; background: white; transition: all 0.2s;
+        }
+        .filter-chip.active { background: #0f172a; color: white; border-color: #0f172a; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 緊湊型卡片 */
+        .coupon-card { 
+            background: white; border-radius: 16px; padding: 10px; border: 1px solid #e2e8f0;
+            display: flex; flex-direction: column; position: relative; overflow: hidden;
+        }
+        .coupon-card.used { background: #f8fafc; border-style: dashed; opacity: 0.6; }
+        .coupon-card.used::after { 
+            content: "已核銷"; position: absolute; right: -10px; bottom: 5px; 
+            transform: rotate(-15deg); font-size: 10px; color: #94a3b8; 
+            border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 4px;
+        }
     </style>
 </head>
 <body class="pb-32">
@@ -67,8 +87,21 @@
                 </div>
             </div>
             <details class="mt-4" open>
-                <summary class="text-center text-[10px] font-black text-slate-400 py-2 cursor-pointer uppercase tracking-widest">核銷明細</summary>
-                <div id="individualList" class="space-y-2 mt-2"></div>
+                <div class="sticky top-[68px] bg-slate-50 z-40 py-3 space-y-3 shadow-sm border-b -mx-4 px-4">
+                <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar" id="memberFilter">
+                    <button onclick="setFilter('member', 'all')" class="filter-chip active" data-type="member" data-val="all">全部成員</button>
+                    <button onclick="setFilter('member', '爸爸')" class="filter-chip border-爸爸 text-爸爸" data-type="member" data-val="爸爸">爸爸</button>
+                    <button onclick="setFilter('member', '媽媽')" class="filter-chip border-媽媽 text-媽媽" data-type="member" data-val="媽媽">媽媽</button>
+                    <button onclick="setFilter('member', '姐姐')" class="filter-chip border-姐姐 text-姐姐" data-type="member" data-val="姐姐">姐姐</button>
+                    <button onclick="setFilter('member', '昌哥')" class="filter-chip border-昌哥 text-昌哥" data-type="member" data-val="昌哥">昌哥</button>
+                    <button onclick="setFilter('member', '妹妹')" class="filter-chip border-妹妹 text-妹妹" data-type="member" data-val="妹妹">妹妹</button>
+                </div>
+                <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar" id="platformFilter">
+                    <button onclick="setFilter('platform', 'all')" class="filter-chip active" data-type="platform" data-val="all">所有平台</button>
+                    </div>
+                </div>
+
+                <div id="individualList" class="grid grid-cols-2 gap-2 mt-4"></div>
             </details>
         </div>
 
@@ -162,6 +195,17 @@
         let allCoupons = {};
         const validWeekKeys = WEEK_DATA.map(w => w.key);
 
+        let currentFilters = { member: 'all', platform: 'all' };
+
+        function setFilter(type, val) {
+            currentFilters[type] = val;
+            // 更新 UI 狀態
+            document.querySelectorAll(`.filter-chip[data-type="${type}"]`).forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-val') === val);
+            });
+            updateSummaryTable(); // 重新渲染列表
+        }
+
         function updateSummaryTable() {
             const wkData = allCoupons[currentWeekKey] || {};
             const res = {}; MEMBERS.forEach(m => res[m] = { platforms: {} });
@@ -186,11 +230,38 @@
             document.getElementById('redeemTableBody').innerHTML = bodyHtml || '<tr><td colspan="4" class="py-10 text-slate-400">本週暫無數據</td></tr>';
             document.getElementById('redeemTableFoot').innerHTML = (gFaceRem+gFaceUsed)>0 ? `<tr class="grand-total-row" onclick="bulkToggle()"><td colspan="2" class="text-xs">全家總計</td><td class="font-mono">${gFaceRem>0?gFaceRem:''} <div class="text-used opacity-60 line-through">(${gFaceUsed})</div></td><td class="font-mono text-emerald-400">${gFaceRem>0?gFaceRem*3:''}</td></tr>` : '';
             
-            let listHtml = ""; Object.keys(wkData).sort((a,b)=>wkData[a].used - wkData[b].used).forEach(id => {
-                const c = wkData[id]; const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                listHtml += `<div class="flex items-center justify-between bg-white p-3 rounded-xl border ${c.used ? 'opacity-30' : ''}"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-${m} text-white flex items-center justify-center text-[10px] font-bold">${m[0]}</div><div class="text-sm font-bold">${c.payment} <span class="${c.used?'line-through':''}">${c.amount}</span></div></div><button onclick="toggleCoupon('${id}')" class="px-3 py-1 bg-slate-100 rounded-lg text-[10px] font-bold">${c.used?'還原':'核銷'}</button></div>`;
+            // 更新平台篩選按鈕 (動態獲取當週有的平台)
+            const platforms = [...new Set(Object.values(wkData).map(c => c.payment))];
+            let pFilterHtml = `<button onclick="setFilter('platform', 'all')" class="filter-chip ${currentFilters.platform==='all'?'active':''}" data-type="platform" data-val="all">所有平台</button>`;
+            platforms.forEach(p => {
+                pFilterHtml += `<button onclick="setFilter('platform', '${p}')" class="filter-chip ${currentFilters.platform===p?'active':''}" data-type="platform" data-val="${p}">${p}</button>`;
             });
-            document.getElementById('individualList').innerHTML = listHtml || '<p class="text-center text-slate-400 py-4">無明細</p>';
+            document.getElementById('platformFilter').innerHTML = pFilterHtml;
+
+            // 渲染過濾後的清單
+            let listHtml = "";
+            Object.keys(wkData).reverse().forEach(id => {
+                const c = wkData[id];
+                const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
+                
+                // 篩選邏輯
+                if (currentFilters.member !== 'all' && m !== currentFilters.member) return;
+                if (currentFilters.platform !== 'all' && c.payment !== currentFilters.platform) return;
+            
+                listHtml += `
+                    <div class="coupon-card ${c.used ? 'used' : ''}">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-6 h-6 rounded-full bg-${m} text-white flex items-center justify-center text-[10px] font-bold">${m[0]}</div>
+                            <span class="text-[10px] font-bold text-slate-500">${c.payment}</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-800 mb-2">${c.amount}</div>
+                        <div class="flex gap-1 mt-auto">
+                            <button onclick="toggleCoupon('${id}')" class="flex-1 py-1.5 bg-slate-100 rounded-lg text-[10px] font-bold">${c.used?'還原':'核銷'}</button>
+                            <button onclick="deleteCoupon('${id}')" class="px-2 py-1.5 text-rose-400 text-[10px]">✕</button>
+                        </div>
+                    </div>`;
+            });
+            document.getElementById('individualList').innerHTML = listHtml || '<div class="col-span-2 text-center text-slate-400 py-10 text-xs">沒有符合篩選條件的獎賞</div>';   
         }
 
         function updateStatsUI() {
@@ -259,6 +330,19 @@
             const tf = window.tempMatched.reduce((a,b)=>a+b.amount, 0); const tr = bill - tf;
             window.tempMatched.forEach(item => { db.ref(`coupons/${currentWeekKey}/${item.id}`).update({ used: true, billAmount: bill, realPayPart: (item.amount/tf)*tr }); });
             toggleCalc(false); document.getElementById('billAmount').value = '';
+        }
+        // 刪除功能函數
+        function deleteCoupon(id) {
+            if (confirm('確定要永久刪除這張優惠券嗎？此操作無法撤回。')) {
+                db.ref(`coupons/${currentWeekKey}/${id}`).remove()
+                    .then(() => {
+                        // 可選：加入一個簡單的提示
+                        console.log("刪除成功");
+                    })
+                    .catch((error) => {
+                        alert("刪除失敗: " + error.message);
+                    });
+            }
         }
         db.ref('coupons').on('value', s => { allCoupons = s.val() || {}; updateSummaryTable(); updateStatsUI(); });
         window.onload = () => {
