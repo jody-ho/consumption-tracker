@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 消費獎賞助手</title>
+    <title>2026 消費獎賞助手 V3.14</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
@@ -20,16 +20,29 @@
         .subtotal-row td { border-top: 2px solid #e2e8f0; border-bottom: 1px solid #cbd5e1; }
         .grand-total-row { background-color: #0f172a !important; color: white !important; font-weight: 900; }
 
-        .text-爸爸 { color: #3b82f6; } .active-爸爸 { background: #3b82f6 !important; color: white !important; }
-        .text-媽媽 { color: #ec4899; } .active-媽媽 { background: #ec4899 !important; color: white !important; }
-        .text-姐姐 { color: #0ea5e9; } .active-姐姐 { background: #0ea5e9 !important; color: white !important; }
-        .text-昌哥 { color: #f59e0b; } .active-昌哥 { background: #f59e0b !important; color: white !important; }
-        .text-妹妹 { color: #8b5cf6; } .active-妹妹 { background: #8b5cf6 !important; color: white !important; }
+        /* 顏色定義 */
+        .bg-爸爸 { background-color: #3b82f6; } .text-爸爸 { color: #3b82f6; border-color: #3b82f6; }
+        .bg-媽媽 { background-color: #ec4899; } .text-媽媽 { color: #ec4899; border-color: #ec4899; }
+        .bg-姐姐 { background-color: #0ea5e9; } .text-姐姐 { color: #0ea5e9; border-color: #0ea5e9; }
+        .bg-昌哥 { background-color: #f59e0b; } .text-昌哥 { color: #f59e0b; border-color: #f59e0b; }
+        .bg-妹妹 { background-color: #8b5cf6; } .text-妹妹 { color: #8b5cf6; border-color: #8b5cf6; }
+        .active-爸爸 { background-color: #3b82f6 !important; color: white !important; }
+        .active-媽媽 { background-color: #ec4899 !important; color: white !important; }
+        .active-姐姐 { background-color: #0ea5e9 !important; color: white !important; }
+        .active-昌哥 { background-color: #f59e0b !important; color: white !important; }
+        .active-妹妹 { background-color: #8b5cf6 !important; color: white !important; }
 
-        #smartFab { position: fixed !important; right: 20px !important; bottom: 110px !important; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; z-index: 9999; box-shadow: 0 10px 20px rgba(0,0,0,0.2); border: none; }
+        /* 篩選標籤樣式 */
+        .filter-chip { flex: 0 0 auto; padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: bold; border: 1.5px solid #e2e8f0; color: #64748b; background: white; transition: all 0.2s; }
+        .filter-chip.active { background: #0f172a !important; color: white !important; border-color: #0f172a !important; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
         .member-btn { transition: all 0.2s; background: #f1f5f9; border-radius: 12px; font-weight: bold; font-size: 11px; padding: 12px 0; border: 2px solid transparent; }
         .coupon-card { width: calc(33.33% - 6px); background: white; border-radius: 12px; padding: 10px; border: 1px solid #e2e8f0; text-align: center; position: relative; }
         .coupon-card.used { opacity: 0.4; background: #f1f5f9; border-style: dashed; }
+        
+        #smartFab { position: fixed !important; right: 20px !important; bottom: 110px !important; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; z-index: 9999; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); border: none; }
+        .font-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: -0.5px; }
     </style>
 </head>
 <body class="pb-32">
@@ -49,18 +62,11 @@
                 </table>
             </div>
             
-            <div class="bg-white rounded-2xl shadow-sm border p-3 mt-6 space-y-3">
-                <div class="flex items-start gap-2">
-                    <span class="text-[11px] font-black text-slate-400 mt-1 w-8">成員</span>
-                    <div class="flex-1 flex flex-wrap gap-1.5" id="filter-members"></div>
-                </div>
-                <div class="flex items-start gap-2">
-                    <span class="text-[11px] font-black text-slate-400 mt-1 w-8">平台</span>
-                    <div class="flex-1 flex flex-wrap gap-1.5" id="filter-platforms"></div>
-                </div>
-                <div class="flex items-center gap-2 pt-2 border-t border-slate-50">
-                     <span class="text-[11px] font-black text-slate-400 w-8">狀態</span>
-                     <select id="filterStatus" onchange="renderList()" class="text-xs bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg outline-none font-bold text-slate-600 flex-1">
+            <div class="sticky top-[68px] bg-slate-50/90 backdrop-blur-md z-40 py-3 space-y-3 -mx-4 px-4 border-b border-slate-200 mt-4">
+                <div class="flex gap-2 overflow-x-auto no-scrollbar" id="filter-members"></div>
+                <div class="flex gap-2 overflow-x-auto no-scrollbar" id="filter-platforms"></div>
+                <div class="flex items-center gap-2 mt-1">
+                     <select id="filterStatus" onchange="renderList()" class="text-xs bg-white border border-slate-200 px-2 py-1.5 rounded-lg outline-none font-bold text-slate-600">
                          <option value="All">顯示全部狀態</option>
                          <option value="Available">僅顯示可用券</option>
                          <option value="Used">僅顯示已核銷</option>
@@ -68,7 +74,7 @@
                 </div>
             </div>
             
-            <div id="individualList" class="flex flex-col gap-6 pb-20 mt-2"></div>
+            <div id="individualList" class="flex flex-col gap-6 pb-20 mt-4"></div>
             <button id="smartFab" onclick="toggleCalc(true)" class="bg-rose-600 text-white">🛒</button>
         </div>
 
@@ -141,13 +147,26 @@
     </div>
 
     <div id="calculatorModal" onclick="if(event.target===this) toggleCalc(false)" class="hidden fixed inset-0 bg-black/80 z-[10000] items-center justify-center p-6">
-        <div class="bg-slate-900 w-full max-w-sm rounded-[40px] p-8 space-y-6" onclick="event.stopPropagation()">
-            <h3 class="text-white font-black text-xl text-center">智能湊券助手</h3>
-            <p class="text-rose-400 text-[10px] text-center -mt-4">⚠️ 將根據你在外層勾選的「成員與平台」進行篩選分配</p>
-            <input type="number" id="billAmount" oninput="runSmartMatch()" placeholder="輸入消費金額..." class="w-full bg-slate-800 border-none rounded-3xl py-6 text-4xl font-black text-rose-400 text-center outline-none">
+        <div class="bg-slate-900 w-full max-w-sm rounded-[40px] p-8 shadow-2xl space-y-6" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center text-white">
+                <h3 class="font-black text-xl">智能湊券助手</h3>
+                <button onclick="toggleCalc(false)" class="text-slate-500 text-xl font-bold">✕</button>
+            </div>
+            <p class="text-slate-400 text-[10px] -mt-4">⚠️ 將根據你在外層勾選的「成員與平台」進行篩選分配</p>
+            <input type="number" id="billAmount" oninput="runSmartMatch()" placeholder="輸入金額..." class="w-full bg-slate-800 border-none rounded-3xl py-6 text-4xl font-black text-rose-400 outline-none text-center">
+            
             <div id="smartResult" class="hidden space-y-4">
-                <div id="smartPlanList" class="space-y-2 max-h-48 overflow-y-auto no-scrollbar"></div>
-                <button onclick="applySmartRedeem()" class="w-full bg-rose-600 py-4 rounded-2xl font-black text-white shadow-lg">確認使用這些券</button>
+                <div id="smartPlanList" class="space-y-2 max-h-48 overflow-y-auto pr-2 no-scrollbar"></div>
+                <div class="bg-white/5 rounded-3xl p-5 space-y-2 border border-white/5">
+                    <div class="flex justify-between text-slate-400 text-xs"><span>預計抵扣</span><span id="displayDiscount" class="font-mono">0.0</span></div>
+                    <div id="perfectMatchBadge" class="hidden bg-emerald-500/20 text-emerald-400 text-[10px] py-1 rounded-full text-center font-bold tracking-widest uppercase">✨ 完美匹配</div>
+                    <div class="flex justify-between items-end border-t border-white/10 pt-3 mt-2">
+                        <span class="text-white text-sm font-bold">最後還需自付</span>
+                        <span id="predictPay" class="text-3xl font-black text-emerald-400 font-mono">0.0</span>
+                    </div>
+                </div>
+                <div id="upsellHint" class="hidden p-4 rounded-2xl font-bold leading-tight shadow-inner"></div>
+                <button onclick="applySmartRedeem()" class="w-full bg-rose-600 py-4 rounded-2xl font-black text-white shadow-lg active:scale-95 transition-all">確認使用</button>
             </div>
         </div>
     </div>
@@ -166,6 +185,7 @@
             let e = new Date(s); e.setDate(e.getDate() + 6); 
             WEEK_DATA.push({ id:i+1, key:`2026-W${i+1}`, start:s, end:e, range:`${s.getMonth()+1}/${s.getDate()}-${e.getMonth()+1}/${e.getDate()}` }); 
         }
+        const VALID_WEEKS = WEEK_DATA.map(w => w.key);
         
         let currentWeekKey = WEEK_DATA[0].key;
         let currentUser = '爸爸';
@@ -177,31 +197,54 @@
         let activeFMem = [...MEMBERS];
         let activeFPlat = [...PLATFORMS];
 
+        // 智能單選/多選邏輯
+        function selectAllMem() { activeFMem = [...MEMBERS]; renderFilters(); renderList(); }
+        function selectAllPlat() { activeFPlat = [...PLATFORMS]; renderFilters(); renderList(); }
+
+        function toggleFMem(m) {
+            if (activeFMem.length === MEMBERS.length) {
+                activeFMem = [m]; // 全選狀態下點擊，自動變成單選
+            } else {
+                if (activeFMem.includes(m)) {
+                    activeFMem = activeFMem.filter(x => x !== m);
+                    if (activeFMem.length === 0) activeFMem = [...MEMBERS]; // 全取消則恢復全選
+                } else {
+                    activeFMem.push(m); // 追加多選
+                }
+            }
+            renderFilters(); renderList();
+        }
+
+        function toggleFPlat(p) {
+            if (activeFPlat.length === PLATFORMS.length) {
+                activeFPlat = [p];
+            } else {
+                if (activeFPlat.includes(p)) {
+                    activeFPlat = activeFPlat.filter(x => x !== p);
+                    if (activeFPlat.length === 0) activeFPlat = [...PLATFORMS];
+                } else {
+                    activeFPlat.push(p);
+                }
+            }
+            renderFilters(); renderList();
+        }
+
         function renderFilters() {
-            let mHtml = '';
+            const allMemActive = activeFMem.length === MEMBERS.length;
+            let mHtml = `<button onclick="selectAllMem()" class="filter-chip ${allMemActive ? 'active' : ''}">全部</button>`;
             MEMBERS.forEach(m => {
-                const isActive = activeFMem.includes(m);
-                mHtml += `<button onclick="toggleFMem('${m}')" class="px-2 py-1 rounded-md text-[11px] font-bold border transition-all ${isActive ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-200'}">${m}</button>`;
+                const isActive = activeFMem.includes(m) && !allMemActive;
+                mHtml += `<button onclick="toggleFMem('${m}')" class="filter-chip text-${m} ${isActive ? 'active' : ''}">${m}</button>`;
             });
             document.getElementById('filter-members').innerHTML = mHtml;
 
-            let pHtml = '';
+            const allPlatActive = activeFPlat.length === PLATFORMS.length;
+            let pHtml = `<button onclick="selectAllPlat()" class="filter-chip ${allPlatActive ? 'active' : ''}">全部</button>`;
             PLATFORMS.forEach(p => {
-                const isActive = activeFPlat.includes(p);
-                pHtml += `<button onclick="toggleFPlat('${p}')" class="px-2 py-1 rounded-md text-[11px] font-bold border transition-all ${isActive ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-400 border-slate-200'}">${p}</button>`;
+                const isActive = activeFPlat.includes(p) && !allPlatActive;
+                pHtml += `<button onclick="toggleFPlat('${p}')" class="filter-chip ${isActive ? 'active' : ''}">${p}</button>`;
             });
             document.getElementById('filter-platforms').innerHTML = pHtml;
-        }
-
-        function toggleFMem(m) {
-            if(activeFMem.includes(m)) activeFMem = activeFMem.filter(x => x!==m);
-            else activeFMem.push(m);
-            renderFilters(); renderList();
-        }
-        function toggleFPlat(p) {
-            if(activeFPlat.includes(p)) activeFPlat = activeFPlat.filter(x => x!==p);
-            else activeFPlat.push(p);
-            renderFilters(); renderList();
         }
 
         function quickRedeem(member, payment) {
@@ -323,7 +366,6 @@
                     if (!res[m]) return;
                     
                     if(c.amount > 0) { 
-                        // 計算排行榜總額
                         if(memberTotals[m] !== undefined) memberTotals[m] += c.amount;
                         if(platformTotals[c.payment] !== undefined) platformTotals[c.payment] += c.amount;
 
@@ -335,7 +377,6 @@
                 });
             });
 
-            // 更新排行榜 UI
             let topM = '-', topMVal = 0;
             MEMBERS.forEach(m => { if(memberTotals[m] > topMVal) { topM = m; topMVal = memberTotals[m]; } });
             let topP = '-', topPVal = 0;
@@ -372,7 +413,6 @@
             document.getElementById('tableGrandTotal').innerHTML = `<tr class="grand-total-row"><td colspan="2">總計</td><td class="font-mono">${gU}</td><td class="font-mono">${gR}</td><td class="text-emerald-400 text-lg font-black font-mono">${Math.round(gP)}</td></tr>`;
         }
 
-        // --- 基礎操作區 ---
         function selectUser(name) { currentUser = name; document.querySelectorAll('.member-btn').forEach(b => { b.className = 'member-btn'; if(b.id === 'btn-'+name) b.classList.add('active-'+name); }); }
         function setSlotValue(v) { slotValues[activeSlot] = v; document.getElementById(`slot-${activeSlot}`).setAttribute('data-touched', 'true'); activeSlot = (activeSlot + 1) % 3; updateSlotUI(); }
         function updateSlotUI() { slotValues.forEach((v, i) => { const el = document.getElementById(`slot-${i}`); const t = el.getAttribute('data-touched')==='true'; el.innerText = (t && v===0)?'謝謝':v; el.className = `flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl transition-all ${t ? 'border-slate-800 bg-white' : 'border-slate-200 bg-slate-50 text-slate-300'} ${i===activeSlot?'border-rose-500 scale-105 shadow-md':''}`; }); }
@@ -392,25 +432,71 @@
         function changeWeek(v) { currentWeekKey = v; updateSummaryTable(); updateStatsUI(); }
         function deleteCoupon(id) { if(confirm('確定刪除？')) db.ref(`coupons/${currentWeekKey}/${id}`).remove(); }
         function toggleCoupon(id) { const c = allCoupons[currentWeekKey][id]; if(c.amount === 0) return; const ns = !c.used; db.ref(`coupons/${currentWeekKey}/${id}`).update({ used: ns, realPayPart: ns ? (c.amount*2) : 0 }); }
-        function toggleCalc(s) { document.getElementById('calculatorModal').classList.toggle('hidden', !s); if(s) { document.getElementById('billAmount').value=''; document.getElementById('smartResult').classList.add('hidden'); } }
+        function toggleCalc(s) { document.getElementById('calculatorModal').classList.toggle('hidden', !s); if(s) { document.getElementById('billAmount').value=''; document.getElementById('smartResult').classList.add('hidden'); document.getElementById('upsellHint').classList.add('hidden'); } }
         function toggleZoom() { document.documentElement.style.fontSize = document.documentElement.style.fontSize === '22px' ? '18px' : '22px'; }
         
+        // 恢復並升級智能提示邏輯
         function runSmartMatch() {
             const bill = parseFloat(document.getElementById('billAmount').value) || 0;
             const resArea = document.getElementById('smartResult');
+            const upsellHint = document.getElementById('upsellHint');
+            const badge = document.getElementById('perfectMatchBadge');
+            
             if(bill <= 0) { resArea.classList.add('hidden'); return; }
             resArea.classList.remove('hidden');
+            
             const av = []; 
-            Object.values(allCoupons[currentWeekKey] || {}).forEach(c => { 
+            Object.keys(allCoupons[currentWeekKey] || {}).forEach(id => { 
+                const c = allCoupons[currentWeekKey][id];
                 const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member; 
+                // 受外部多選面板控制
                 if(!c.used && c.amount > 0 && activeFMem.includes(m) && activeFPlat.includes(c.payment)) {
-                    av.push({...c, m}); 
+                    av.push({id, ...c, m}); 
                 }
             });
             av.sort((a,b)=>b.amount-a.amount);
-            let rem = bill, html = ""; window.tempMatched = [];
-            for(let c of av) { if(rem >= c.amount*3) { rem -= c.amount*3; html += `<div class="text-white text-xs bg-white/10 p-3 rounded-xl flex justify-between"><span>${c.m} · ${c.payment}</span><span class="font-bold text-rose-400">-${c.amount}</span></div>`; window.tempMatched.push(c); } }
-            document.getElementById('smartPlanList').innerHTML = html || '<div class="text-slate-500 text-center py-4">無符合篩選的可用方案</div>';
+            
+            let remBill = bill; let disc = 0; let totalReq = 0; let matched = []; let matchedIds = new Set(); let html = "";
+            let unusedCoupons = [];
+
+            for(let c of av) { 
+                const req = c.amount * 3;
+                if(remBill >= req) { 
+                    remBill -= req; disc += c.amount; totalReq += req;
+                    html += `<div class="flex justify-between items-center text-white bg-white/5 p-3 rounded-2xl text-xs border border-white/5"><span>${c.m} · ${c.payment}</span><span class="font-black text-rose-400">-${c.amount}</span></div>`; 
+                    matched.push(c); matchedIds.add(c.id);
+                } else {
+                    unusedCoupons.push(c);
+                }
+            }
+            
+            let nextBest = null; let minDiff = Infinity;
+            for(let c of av) {
+                if(matchedIds.has(c.id)) continue;
+                const diff = (c.amount * 3) - remBill;
+                if(diff > 0 && diff < minDiff) { minDiff = diff; nextBest = { diff, name: `${c.m}的${c.amount}元券` }; }
+            }
+
+            // 智能提示渲染
+            if(nextBest) {
+                upsellHint.classList.remove('hidden');
+                upsellHint.className = "mt-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 shadow-inner";
+                upsellHint.innerHTML = `<p class="text-[11px]">💡 再湊 MOP <span class="text-sm font-black">${nextBest.diff.toFixed(1)}</span>，即可多用一張 <span class="underline">${nextBest.name}</span></p>`;
+            } else if (matched.length > 0) {
+                const overSpend = bill - totalReq;
+                upsellHint.classList.remove('hidden');
+                upsellHint.className = "mt-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner";
+                upsellHint.innerHTML = `<p class="text-[11px]">🎉 所有符合篩選的可用券已用完！<br>此金額已超出最低門檻 <span class="text-sm font-black">MOP ${overSpend.toFixed(1)}</span></p>`;
+            } else {
+                upsellHint.classList.add('hidden');
+            }
+
+            document.getElementById('smartPlanList').innerHTML = html || '<div class="text-slate-500 text-center py-4 text-sm">金額未達門檻</div>';
+            document.getElementById('displayDiscount').innerText = `- MOP ${disc.toFixed(1)}`;
+            document.getElementById('predictPay').innerText = (bill - disc).toFixed(1);
+            badge.classList.toggle('hidden', remBill > 1 || bill === 0);
+            
+            window.tempMatched = matched;
         }
         
         function applySmartRedeem() {
