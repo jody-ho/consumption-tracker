@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 消費獎賞助手</title>
+    <title>2026 消費獎賞助手 V3.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
@@ -11,62 +11,53 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background-color: #f1f5f9; color: #1e293b; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .member-btn.active { background-color: #0f172a !important; color: white !important; }
         
-        /* 全域表格樣式：保持寬鬆、大字體、置中 */
+        /* 成員按鈕樣式 */
+        .member-btn { transition: all 0.2s; border: 2px solid transparent; }
+        .member-btn.active-爸爸 { background-color: #3b82f6 !important; color: white !important; border-color: #2563eb; }
+        .member-btn.active-媽媽 { background-color: #ec4899 !important; color: white !important; border-color: #db2777; }
+        .member-btn.active-姐姐 { background-color: #0ea5e9 !important; color: white !important; border-color: #0284c7; }
+        .member-btn.active-昌哥 { background-color: #f59e0b !important; color: white !important; border-color: #d97706; }
+        .member-btn.active-妹妹 { background-color: #8b5cf6 !important; color: white !important; border-color: #7c3aed; }
+        
         .data-table { width: 100% !important; border-collapse: collapse; background: white; table-layout: fixed; }
-        .data-table th { background: #f8fafc; color: #64748b; font-size: 14px; padding: 16px 4px; border-bottom: 2px solid #e2e8f0; text-align: center; }
-        .data-table td { padding: 16px 4px; border-bottom: 1px solid #f1f5f9; font-size: 16px; text-align: center; vertical-align: middle; line-height: 1.4; }
+        .data-table th { background: #f8fafc; color: #64748b; font-size: 13px; padding: 12px 2px; border-bottom: 2px solid #e2e8f0; text-align: center; }
+        .data-table td { padding: 12px 2px; border-bottom: 1px solid #f1f5f9; font-size: 15px; text-align: center; vertical-align: middle; }
         
         .subtotal-row { background-color: #f8fafc; font-weight: bold; }
         .grand-total-row { background-color: #0f172a !important; color: white !important; font-weight: 900; }
 
-        /* 顏色定義 */
-        .bg-爸爸 { background-color: #3b82f6; } .text-爸爸 { color: #3b82f6; border-color: #3b82f6; }
-        .bg-媽媽 { background-color: #ec4899; } .text-媽媽 { color: #ec4899; border-color: #ec4899; }
-        .bg-姐姐 { background-color: #0ea5e9; } .text-姐姐 { color: #0ea5e9; border-color: #0ea5e9; }
-        .bg-昌哥 { background-color: #f59e0b; } .text-昌哥 { color: #f59e0b; border-color: #f59e0b; }
-        .bg-妹妹 { background-color: #8b5cf6; } .text-妹妹 { color: #8b5cf6; border-color: #8b5cf6; }
-
-        /* 各頁面列寬比例 */
-        #tab-redeem .data-table th:nth-child(1) { width: 18%; }
-        #tab-redeem .data-table th:nth-child(2) { width: 25%; }
-        #tab-redeem .data-table th:nth-child(3) { width: 27%; }
-        #tab-redeem .data-table th:nth-child(4) { width: 30%; }
-
-        #tab-stat .data-table th:nth-child(1) { width: 17%; }
-        #tab-stat .data-table th:nth-child(2) { width: 25%; }
-        #tab-stat .data-table th:nth-child(3) { width: 15%; }
-        #tab-stat .data-table th:nth-child(4) { width: 15%; }
-        #tab-stat .data-table th:nth-child(5) { width: 28%; }
+        .text-爸爸 { color: #3b82f6; } .bg-爸爸 { background-color: #3b82f6; }
+        .text-媽媽 { color: #ec4899; } .bg-媽媽 { background-color: #ec4899; }
+        .text-姐姐 { color: #0ea5e9; } .bg-姐姐 { background-color: #0ea5e9; }
+        .text-昌哥 { color: #f59e0b; } .bg-昌哥 { background-color: #f59e0b; }
+        .text-妹妹 { color: #8b5cf6; } .bg-妹妹 { background-color: #8b5cf6; }
 
         .filter-chip { flex: 0 0 auto; padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: bold; border: 1.5px solid #e2e8f0; color: #64748b; background: white; }
-        .filter-chip.active { background: #0f172a; color: white !important; border-color: #0f172a; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .filter-chip.active { background: #0f172a !important; color: white !important; border-color: #0f172a !important; }
 
-        .coupon-card { background: white; border-radius: 20px; padding: 12px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; position: relative; }
+        .coupon-group-box { display: flex; flex-wrap: wrap; gap: 8px; }
+        .coupon-card { width: calc(33.33% - 6px); background: white; border-radius: 16px; padding: 12px; border: 1px solid #e2e8f0; }
         .coupon-card.used { background: #f8fafc; opacity: 0.5; border-style: dashed; }
-        .coupon-card.used::after { content: "已核銷"; position: absolute; right: -5px; bottom: 8px; transform: rotate(-15deg); font-size: 10px; color: #94a3b8; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; background: white; }
+        .coupon-card.zero { border-color: #cbd5e1; background: #f8fafc; }
 
-        #smartFab { position: fixed; right: 20px; bottom: 120px; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); z-index: 100; border:none; outline:none; }
+        #smartFab { position: fixed; right: 20px; bottom: 120px; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); z-index: 100; border:none; }
         #calculatorModal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.8); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
-        .slot-active { border-color: #0f172a !important; background-color: #fff !important; box-shadow: 0 0 0 2px #0f172a; }
-        .font-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: -0.5px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="pb-32">
 
     <div class="max-w-md mx-auto">
-        <header class="bg-white sticky top-0 z-50 p-4 shadow-sm flex items-center justify-between">
+        <header class="bg-white sticky top-0 z-50 p-4 shadow-sm flex items-center justify-between border-b">
             <select id="weekDropdown" onchange="changeWeek(this.value)" class="font-black text-slate-800 bg-transparent outline-none flex-1 text-base"></select>
             <button onclick="toggleZoom()" class="bg-slate-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-slate-500">A±</button>
         </header>
 
         <div id="tab-redeem" class="tab-content active p-4 space-y-4">
             <section class="bg-white rounded-3xl shadow-lg border border-slate-200 overflow-hidden">
-                <div class="bg-emerald-600 p-3 text-white text-center text-[16px] font-bold tracking-widest uppercase">本週匯總</div>
                 <table class="data-table">
-                    <thead><tr><th>成員</th><th>平台</th><th>面額</th><th>需消費</th></tr></thead>
+                    <thead><tr><th style="width:18%">成員</th><th style="width:25%">平台</th><th style="width:27%">面額</th><th style="width:30%">需消費</th></tr></thead>
                     <tbody id="redeemTableBody"></tbody>
                     <tfoot id="redeemTableFoot"></tfoot>
                 </table>
@@ -74,88 +65,64 @@
 
             <div class="sticky top-[68px] bg-slate-50/90 backdrop-blur-md z-40 py-3 space-y-3 -mx-4 px-4 border-b border-slate-200">
                 <div class="flex gap-2 overflow-x-auto no-scrollbar" id="memberFilter">
-                    <button onclick="setFilter('member', 'all')" class="filter-chip active" data-type="member" data-val="all">全部</button>
-                    <button onclick="setFilter('member', '爸爸')" class="filter-chip text-爸爸" data-type="member" data-val="爸爸">爸爸</button>
-                    <button onclick="setFilter('member', '媽媽')" class="filter-chip text-媽媽" data-type="member" data-val="媽媽">媽媽</button>
-                    <button onclick="setFilter('member', '姐姐')" class="filter-chip text-姐姐" data-type="member" data-val="姐姐">姐姐</button>
-                    <button onclick="setFilter('member', '昌哥')" class="filter-chip text-昌哥" data-type="member" data-val="昌哥">昌哥</button>
-                    <button onclick="setFilter('member', '妹妹')" class="filter-chip text-妹妹" data-type="member" data-val="妹妹">妹妹</button>
+                    <button onclick="toggleFilter('member', '爸爸')" class="filter-chip" data-val="爸爸">爸爸</button>
+                    <button onclick="toggleFilter('member', '媽媽')" class="filter-chip" data-val="媽媽">媽媽</button>
+                    <button onclick="toggleFilter('member', '姐姐')" class="filter-chip" data-val="姐姐">姐姐</button>
+                    <button onclick="toggleFilter('member', '昌哥')" class="filter-chip" data-val="昌哥">昌哥</button>
+                    <button onclick="toggleFilter('member', '妹妹')" class="filter-chip" data-val="妹妹">妹妹</button>
                 </div>
                 <div class="flex gap-2 overflow-x-auto no-scrollbar" id="platformFilter"></div>
             </div>
-
-            <div id="individualList" class="grid grid-cols-2 gap-3 pb-20"></div>
-
+            <div id="individualList" class="flex flex-col gap-6 pb-20"></div>
             <button id="smartFab" onclick="toggleCalc(true)" class="bg-rose-600 text-white">🛒</button>
-            <div id="calculatorModal" onclick="if(event.target===this) toggleCalc(false)">
-                <div class="bg-slate-900 w-full max-w-sm rounded-[40px] p-8 shadow-2xl space-y-6" onclick="event.stopPropagation()">
-                    <div class="flex justify-between items-center text-white">
-                        <h3 class="font-black text-xl">智能湊券助手</h3>
-                        <button onclick="toggleCalc(false)" class="text-slate-500">✕</button>
-                    </div>
-                    <input type="number" id="billAmount" oninput="runSmartMatch()" placeholder="輸入金額..." class="w-full bg-slate-800 border-none rounded-3xl py-6 text-4xl font-black text-rose-400 outline-none text-center">
-                    
-                    <div id="smartResult" class="hidden space-y-4">
-                        <div id="smartPlanList" class="space-y-2 max-h-48 overflow-y-auto pr-2"></div>
-                        <div class="bg-white/5 rounded-3xl p-5 space-y-2 border border-white/5">
-                            <div class="flex justify-between text-slate-400 text-xs"><span>預計抵扣</span><span id="displayDiscount" class="font-mono">0.0</span></div>
-                            <div id="perfectMatchBadge" class="hidden bg-emerald-500/20 text-emerald-400 text-[10px] py-1 rounded-full text-center font-bold tracking-widest uppercase">✨ 完美匹配</div>
-                            <div class="flex justify-between items-end border-t border-white/10 pt-3 mt-2">
-                                <span class="text-white text-sm font-bold">最後還需自付</span>
-                                <span id="predictPay" class="text-3xl font-black text-emerald-400 font-mono">0.0</span>
-                            </div>
-                        </div>
-                        <div id="upsellHint" class="hidden p-4 rounded-2xl font-bold leading-tight"></div>
-                        <button onclick="applySmartRedeem()" class="w-full bg-rose-600 py-4 rounded-2xl font-black text-white shadow-lg active:scale-95 transition-all">確認使用</button>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <div id="tab-input" class="tab-content p-4 space-y-6">
             <div class="bg-white rounded-3xl p-5 shadow-sm border space-y-4">
+                <p class="text-xs font-bold text-slate-400 px-1">選擇成員：</p>
                 <div class="grid grid-cols-5 gap-1.5">
-                    <button onclick="selectUser('爸爸', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100 active">爸爸</button>
-                    <button onclick="selectUser('媽媽', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">媽媽</button>
-                    <button onclick="selectUser('姐姐', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">姐姐</button>
-                    <button onclick="selectUser('昌哥', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">昌哥</button>
-                    <button onclick="selectUser('妹妹', this)" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">妹妹</button>
+                    <button onclick="selectUser('爸爸')" id="btn-爸爸" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">爸爸</button>
+                    <button onclick="selectUser('媽媽')" id="btn-媽媽" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">媽媽</button>
+                    <button onclick="selectUser('姐姐')" id="btn-姐姐" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">姐姐</button>
+                    <button onclick="selectUser('昌哥')" id="btn-昌哥" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">昌哥</button>
+                    <button onclick="selectUser('妹妹')" id="btn-妹妹" class="member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100">妹妹</button>
                 </div>
+                
+                <p class="text-xs font-bold text-slate-400 px-1 mt-4">選擇平台：</p>
                 <select id="platformSelect" class="w-full p-4 rounded-xl bg-slate-50 border border-slate-200 font-black outline-none">
                     <option>MPay</option><option>中銀</option><option>工銀</option><option>大豐</option><option>國際</option><option>支付寶</option><option>UEPay</option>
                 </select>
-                <div class="flex gap-3">
-                    <div id="slot-0" onclick="activeSlot=0; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white">0</div>
-                    <div id="slot-1" onclick="activeSlot=1; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white">0</div>
-                    <div id="slot-2" onclick="activeSlot=2; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white">0</div>
+
+                <div class="flex gap-3 py-2">
+                    <div id="slot-0" onclick="activeSlot=0; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white" data-touched="false">0</div>
+                    <div id="slot-1" onclick="activeSlot=1; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white" data-touched="false">0</div>
+                    <div id="slot-2" onclick="activeSlot=2; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white" data-touched="false">0</div>
                 </div>
+
                 <div class="grid grid-cols-3 gap-3">
                     <button onclick="setSlotValue(10)" class="bg-white border py-4 rounded-2xl font-black">10</button>
                     <button onclick="setSlotValue(20)" class="bg-white border py-4 rounded-2xl font-black">20</button>
                     <button onclick="setSlotValue(50)" class="bg-white border py-4 rounded-2xl font-black">50</button>
                     <button onclick="setSlotValue(100)" class="bg-amber-50 text-amber-600 border py-4 rounded-2xl font-black">100</button>
                     <button onclick="setSlotValue(200)" class="bg-rose-50 text-rose-600 border py-4 rounded-2xl font-black">200</button>
-                    <button onclick="slotValues=[0,0,0]; updateSlotUI()" class="bg-slate-100 text-slate-400 py-4 rounded-2xl font-bold">重置</button>
+                    <button onclick="setSlotValue(0)" class="bg-slate-800 text-white py-4 rounded-2xl font-black text-sm">謝謝參與</button>
                 </div>
-                <button onclick="submitBatch()" id="submitBtn" class="w-full bg-slate-800 text-white py-5 rounded-2xl font-black text-lg">📥 登記獎賞</button>
+                <button onclick="submitBatch()" id="submitBtn" class="w-full bg-slate-800 text-white py-5 rounded-2xl font-black text-lg shadow-lg">📥 登記獎賞</button>
             </div>
         </div>
 
         <div id="tab-stat" class="tab-content p-4 space-y-4">
-            <div class="flex justify-between items-center mb-2 px-1">
-                <h3 class="font-black text-slate-800">📊 財務報表 (2026)</h3>
-                <select id="statMode" onchange="updateStatsUI()" class="text-xs font-bold bg-white border px-2 py-1.5 rounded-xl outline-none shadow-sm">
-                    <option value="week">本週數據</option>
-                    <option value="grand">全期總匯</option>
+            <div class="flex justify-between items-center px-1">
+                <h3 class="font-black text-slate-800">📊 財務報表</h3>
+                <select id="statMode" onchange="updateStatsUI()" class="text-xs bg-white border px-2 py-1 rounded-lg">
+                    <option value="week">本週</option><option value="all">全期</option>
                 </select>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div class="bg-white p-4 rounded-3xl border shadow-sm"><p class="text-[10px] text-slate-400 font-bold uppercase">🏆 手氣王</p><p id="luckyKing" class="text-lg font-black text-slate-800">--</p></div>
-                <div class="bg-white p-4 rounded-3xl border shadow-sm"><p class="text-[10px] text-slate-400 font-bold uppercase">💎 最強平台</p><p id="topPlatform" class="text-lg font-black text-slate-800">--</p></div>
             </div>
             <section class="bg-white rounded-3xl shadow-sm border overflow-hidden">
                 <table class="data-table">
-                    <thead><tr><th>成員</th><th>平台</th><th>已用</th><th>剩</th><th>實付</th></tr></thead>
+                    <thead>
+                        <tr><th style="width:20%">成員</th><th style="width:30%">平台</th><th style="width:25%">用/剩</th><th style="width:25%">實付</th></tr>
+                    </thead>
                     <tbody id="memberTableBody"></tbody>
                     <tfoot id="tableGrandTotal"></tfoot>
                 </table>
@@ -169,24 +136,29 @@
         </nav>
     </div>
 
+    <div id="calculatorModal" onclick="if(event.target===this) toggleCalc(false)" class="hidden fixed inset-0 bg-black/80 z-[200] items-center justify-center p-6">
+        <div class="bg-slate-900 w-full max-w-sm rounded-[40px] p-8 space-y-6" onclick="event.stopPropagation()">
+            <h3 class="text-white font-black text-xl">智能湊券助手</h3>
+            <input type="number" id="billAmount" oninput="runSmartMatch()" placeholder="輸入金額..." class="w-full bg-slate-800 border-none rounded-3xl py-6 text-4xl font-black text-rose-400 text-center outline-none">
+            <div id="smartResult" class="hidden space-y-4">
+                <div id="smartPlanList" class="space-y-2 max-h-48 overflow-y-auto no-scrollbar"></div>
+                <button onclick="applySmartRedeem()" class="w-full bg-rose-600 py-4 rounded-2xl font-black text-white">確認使用</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4",
-            authDomain: "testing-a7aba.firebaseapp.com",
-            projectId: "testing-a7aba",
-            databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/",
-            appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d"
-        };
+        const firebaseConfig = { apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4", authDomain: "testing-a7aba.firebaseapp.com", projectId: "testing-a7aba", databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/", appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
         const MEMBERS = ['爸爸', '媽媽', '姐姐', '昌哥', '妹妹'];
         const WEEK_DATA = [];
         const START_DATE = new Date('2026-04-10');
-        for(let i=0; i<10; i++){
-            let s = new Date(START_DATE); s.setDate(s.getDate() + i*7);
-            let e = new Date(s); e.setDate(e.getDate() + 6);
-            WEEK_DATA.push({ id:i+1, key:`2026-W${i+1}`, range:`${s.getMonth()+1}/${s.getDate()}-${e.getMonth()+1}/${e.getDate()}` });
+        for(let i=0; i<10; i++){ 
+            let s = new Date(START_DATE); s.setDate(s.getDate() + i*7); 
+            let e = new Date(s); e.setDate(e.getDate() + 6); 
+            WEEK_DATA.push({ id:i+1, key:`2026-W${i+1}`, start:s, end:e, range:`${s.getMonth()+1}/${s.getDate()}-${e.getMonth()+1}/${e.getDate()}` }); 
         }
         
         let currentWeekKey = WEEK_DATA[0].key;
@@ -194,7 +166,14 @@
         let activeSlot = 0;
         let slotValues = [0,0,0];
         let allCoupons = {};
-        let currentFilters = { member: 'all', platform: 'all' };
+        let selectedMembers = new Set(); 
+        let selectedPlatforms = new Set();
+
+        function autoJumpToCurrentWeek() {
+            const now = new Date();
+            const found = WEEK_DATA.find(w => now >= w.start && now <= w.end);
+            if (found) { currentWeekKey = found.key; document.getElementById('weekDropdown').value = found.key; }
+        }
 
         function updateSummaryTable() {
             const wkData = allCoupons[currentWeekKey] || {};
@@ -203,197 +182,178 @@
 
             Object.values(wkData).forEach(c => {
                 const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                if(!res[m].platforms[c.payment]) res[m].platforms[c.payment] = { rem: 0, used: 0 };
-                if(c.used) { res[m].platforms[c.payment].used += c.amount; gUsed += c.amount; }
+                if(!res[m]) return;
+                if(!res[m].platforms[c.payment]) res[m].platforms[c.payment] = { rem: 0, used: 0, zero: 0 };
+                if(c.amount === 0) { res[m].platforms[c.payment].zero++; }
+                else if(c.used) { res[m].platforms[c.payment].used += c.amount; gUsed += c.amount; }
                 else { res[m].platforms[c.payment].rem += c.amount; gRem += c.amount; }
             });
 
             let bodyHtml = "";
             MEMBERS.forEach(m => {
                 const pKeys = Object.keys(res[m].platforms); if(pKeys.length === 0) return;
-                let mRem = 0, mUsed = 0;
+                let mRem = 0;
                 pKeys.forEach((p, idx) => {
-                    const d = res[m].platforms[p]; mRem += d.rem; mUsed += d.used;
-                    bodyHtml += `<tr>
-                        ${idx === 0 ? `<td rowspan="${pKeys.length + 1}" class="font-bold text-${m} border-r" onclick="setFilter('member', '${m}')">${m}</td>` : ''}
-                        <td class="text-slate-500 border-r ${d.rem===0?'opacity-30':''}" onclick="togglePlatformBatch('${m}', '${p}')">${p}</td>
-                        <td class="font-mono ${d.rem===0?'opacity-30':''}">${d.rem > 0 ? d.rem : ''}${d.used > 0 ? `<div class="text-[12px] text-slate-400 line-through">(${d.used})</div>` : ''}</td>
-                        <td class="font-mono text-slate-400">${d.rem > 0 ? d.rem*3 : ''}</td>
-                    </tr>`;
+                    const d = res[m].platforms[p]; mRem += d.rem;
+                    let amountDisplay = "";
+                    if(d.rem > 0) amountDisplay += `<div>${d.rem}</div>`;
+                    if(d.used > 0) amountDisplay += `<div class="text-[10px] text-slate-400 line-through">(${d.used})</div>`;
+                    if(d.zero > 0) amountDisplay += `<div class="text-[10px] text-slate-400 italic">謝謝參與×${d.zero}</div>`;
+                    bodyHtml += `<tr>${idx === 0 ? `<td rowspan="${pKeys.length + 1}" class="font-bold text-${m} border-r">${m}</td>` : ''}<td class="text-slate-500 border-r">${p}</td><td>${amountDisplay || '0'}</td><td class="font-mono text-slate-400">${d.rem > 0 ? d.rem*3 : ''}</td></tr>`;
                 });
-                bodyHtml += `<tr class="subtotal-row" onclick="setFilter('member', '${m}')">
-                    <td class="text-[12px] text-slate-400 border-r">${m} 小計</td>
-                    <td class="font-mono text-center">${mRem > 0 ? mRem : ''}${mUsed > 0 ? `<div class="text-[12px] line-through">(${mUsed})</div>` : ''}</td>
-                    <td class="font-mono text-slate-400 text-center">${mRem > 0 ? mRem*3 : ''}</td>
-                </tr>`;
+                bodyHtml += `<tr class="subtotal-row"><td class="text-[12px] text-slate-400 border-r">小計</td><td>${mRem > 0 ? mRem : ''}</td><td class="font-mono text-slate-400">${mRem > 0 ? mRem*3 : ''}</td></tr>`;
             });
             document.getElementById('redeemTableBody').innerHTML = bodyHtml || '<tr><td colspan="4" class="py-10 text-slate-400">本週無數據</td></tr>';
-            document.getElementById('redeemTableFoot').innerHTML = (gRem+gUsed)>0 ? `
-                <tr class="grand-total-row" onclick="setFilter('member', 'all')">
-                    <td colspan="2" class="py-4">全家總計</td>
-                    <td class="font-mono">${gRem} <span class="text-[12px] opacity-60 line-through">(${gUsed})</span></td>
-                    <td class="font-mono text-emerald-400">${gRem*3}</td>
-                </tr>` : '';
+            document.getElementById('redeemTableFoot').innerHTML = (gRem+gUsed)>0 ? `<tr class="grand-total-row"><td colspan="2" class="py-4">總計</td><td>${gRem}</td><td class="font-mono text-emerald-400">${gRem*3}</td></tr>` : '';
 
-            const pSet = [...new Set(Object.values(wkData).map(c => c.payment))];
-            let pBtnHtml = `<button onclick="setFilter('platform', 'all')" class="filter-chip ${currentFilters.platform==='all'?'active':''}" data-type="platform" data-val="all">所有平台</button>`;
-            pSet.forEach(p => pBtnHtml += `<button onclick="setFilter('platform', '${p}')" class="filter-chip ${currentFilters.platform===p?'active':''}" data-type="platform" data-val="${p}">${p}</button>`);
-            document.getElementById('platformFilter').innerHTML = pBtnHtml;
-
-            let listHtml = "";
-            Object.keys(wkData).reverse().forEach(id => {
-                const c = wkData[id]; const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                if (currentFilters.member !== 'all' && m !== currentFilters.member) return;
-                if (currentFilters.platform !== 'all' && c.payment !== currentFilters.platform) return;
-                listHtml += `<div class="coupon-card ${c.used ? 'used' : ''}"><div class="flex items-center gap-2 mb-2"><div class="w-5 h-5 rounded-full bg-${m} text-white flex items-center justify-center text-[9px] font-bold">${m[0]}</div><span class="text-[10px] font-bold text-slate-500 truncate">${c.payment}</span></div><div class="text-2xl font-black text-slate-800 mb-3">${c.amount}</div><div class="flex gap-1 mt-auto"><button onclick="toggleCoupon('${id}')" class="flex-1 py-2 bg-slate-100 rounded-xl text-[10px] font-bold">${c.used?'還原':'核銷'}</button><button onclick="deleteCoupon('${id}')" class="px-2 py-2 text-rose-300 text-xs">✕</button></div></div>`;
-            });
-            document.getElementById('individualList').innerHTML = listHtml || '<div class="col-span-2 text-center text-slate-400 py-10 text-xs">無符合條件數據</div>';
-        }
-
-        function setFilter(type, val) {
-            currentFilters[type] = val;
-            document.querySelectorAll(`.filter-chip[data-type="${type}"]`).forEach(b => b.classList.toggle('active', b.getAttribute('data-val') === val));
-            updateSummaryTable();
-        }
-
-        function togglePlatformBatch(member, platform) {
-            const wkData = allCoupons[currentWeekKey] || {};
-            const targets = []; let hasUnused = false;
+            // 明細列表
+            let listHtml = ""; const groups = {};
             Object.keys(wkData).forEach(id => {
                 const c = wkData[id]; const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                if(m === member && c.payment === platform) { targets.push({id, ...c}); if(!c.used) hasUnused = true; }
+                if (selectedMembers.size > 0 && !selectedMembers.has(m)) return;
+                if (selectedPlatforms.size > 0 && !selectedPlatforms.has(c.payment)) return;
+                const key = `${m}-${c.payment}`;
+                if(!groups[key]) groups[key] = { m, p: c.payment, items: [] };
+                groups[key].items.push({ id, ...c });
             });
-            if(!targets.length) return;
-            const nextState = hasUnused;
-            if(confirm(`確定${nextState?'核銷':'還原'} ${member} 在 ${platform} 的 ${targets.length} 張券？`)) {
-                const up = {}; targets.forEach(t => { up[`coupons/${currentWeekKey}/${t.id}/used`] = nextState; up[`coupons/${currentWeekKey}/${t.id}/billAmount`] = nextState ? (t.amount*3) : 0; up[`coupons/${currentWeekKey}/${t.id}/realPayPart`] = nextState ? (t.amount*2) : 0; });
-                db.ref().update(up);
-            }
-        }
 
-        function runSmartMatch() {
-            const bill = parseFloat(document.getElementById('billAmount').value) || 0;
-            const resArea = document.getElementById('smartResult');
-            const upsellHint = document.getElementById('upsellHint');
-            const badge = document.getElementById('perfectMatchBadge');
-            if (bill <= 0) { resArea.classList.add('hidden'); return; }
-            resArea.classList.remove('hidden');
-
-            const av = [];
-            Object.keys(allCoupons[currentWeekKey] || {}).forEach(id => { 
-                if(!allCoupons[currentWeekKey][id].used) av.push({id, ...allCoupons[currentWeekKey][id]}); 
+            Object.values(groups).forEach(g => {
+                listHtml += `<div class="space-y-3"><div class="flex items-center gap-2 px-1"><span class="w-1.5 h-4 bg-${g.m} rounded-full"></span><span class="font-black text-sm text-slate-700">${g.m} · ${g.p}</span></div><div class="coupon-group-box">`;
+                g.items.sort((a,b)=>b.amount-a.amount).forEach(c => {
+                    const isZero = (c.amount === 0);
+                    listHtml += `<div class="coupon-card ${c.used?'used':''} ${isZero?'zero':''}"><div class="${isZero?'text-[10px]':'text-xl'} font-black ${isZero?'text-slate-400':'text-slate-800'} mb-2">${isZero?'謝謝參與':c.amount}</div><div class="flex gap-1">${isZero ? `<button onclick="deleteCoupon('${c.id}')" class="w-full py-1.5 text-rose-300 font-bold text-[10px]">移除紀錄</button>` : `<button onclick="toggleCoupon('${c.id}')" class="flex-1 py-1.5 bg-slate-100 rounded-lg text-[10px] font-bold">${c.used?'還原':'核銷'}</button><button onclick="deleteCoupon('${c.id}')" class="px-1 py-1.5 text-rose-300 font-bold">✕</button>`}</div></div>`;
+                });
+                listHtml += `</div></div>`;
             });
-            av.sort((a,b) => b.amount - a.amount);
-
-            let remBill = bill; let disc = 0; let totalReq = 0; let matched = []; let matchedIds = new Set(); let html = "";
-            for (let c of av) {
-                const req = c.amount * 3;
-                if(remBill >= req) { 
-                    remBill -= req; disc += c.amount; totalReq += req;
-                    matched.push(c); matchedIds.add(c.id); 
-                    const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member; 
-                    html += `<div class="flex justify-between items-center text-white bg-white/5 p-3 rounded-2xl text-xs"><span>${m}(${c.payment})</span><span class="font-black text-rose-400">-${c.amount}</span></div>`; 
-                }
-            }
-
-            let nextBest = null; let minDiff = Infinity;
-            for(let c of av) {
-                if(matchedIds.has(c.id)) continue;
-                const diff = (c.amount * 3) - remBill;
-                if(diff > 0 && diff < minDiff) { minDiff = diff; nextBest = { diff, name: `${c.member}的${c.amount}元券` }; }
-            }
-
-            if(nextBest) {
-                upsellHint.classList.remove('hidden');
-                upsellHint.className = "mt-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500";
-                upsellHint.innerHTML = `<p class="text-[11px]">💡 再湊 MOP <span class="text-sm font-black">${nextBest.diff.toFixed(1)}</span>，即可多用一張 <span class="underline">${nextBest.name}</span></p>`;
-            } else if (matched.length > 0) {
-                const overSpend = bill - totalReq;
-                upsellHint.classList.remove('hidden');
-                upsellHint.className = "mt-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400";
-                upsellHint.innerHTML = `<p class="text-[11px]">🎉 所有可用券已用完！<br>此金額已超出最低門檻 <span class="text-sm font-black">MOP ${overSpend.toFixed(1)}</span></p>`;
-            } else {
-                upsellHint.classList.add('hidden');
-            }
-            
-            document.getElementById('smartPlanList').innerHTML = html || '<div class="text-center text-slate-500 py-4 text-xs">金額未達門檻</div>';
-            document.getElementById('displayDiscount').innerText = `- MOP ${disc.toFixed(1)}`;
-            document.getElementById('predictPay').innerText = (bill - disc).toFixed(1);
-            badge.classList.toggle('hidden', remBill > 1 || bill === 0);
-            window.tempMatched = matched;
-        }
-
-        function toggleCoupon(id) { const c = allCoupons[currentWeekKey][id]; const ns = !c.used; db.ref(`coupons/${currentWeekKey}/${id}`).update({ used: ns, realPayPart: ns ? (c.amount*2) : 0, billAmount: ns ? (c.amount*3) : 0 }); }
-        function deleteCoupon(id) { if(confirm('確定刪除？')) db.ref(`coupons/${currentWeekKey}/${id}`).remove(); }
-        
-        function applySmartRedeem() {
-            const bill = parseFloat(document.getElementById('billAmount').value); if(!window.tempMatched?.length) return;
-            const tf = window.tempMatched.reduce((a,b)=>a+b.amount,0);
-            window.tempMatched.forEach(t => db.ref(`coupons/${currentWeekKey}/${t.id}`).update({ used: true, billAmount: bill, realPayPart: (t.amount/tf)*(bill-tf) }));
-            toggleCalc(false); document.getElementById('billAmount').value = '';
-        }
-
-        function toggleCalc(s) { document.getElementById('calculatorModal').style.display = s ? 'flex' : 'none'; if(s) setTimeout(()=>document.getElementById('billAmount').focus(), 100); }
-        function selectUser(n, b) { currentUser = n; document.querySelectorAll('.member-btn').forEach(btn => btn.classList.remove('active')); b.classList.add('active'); }
-        function setSlotValue(v) { slotValues[activeSlot] = v; activeSlot = (activeSlot + 1) % 3; updateSlotUI(); }
-        function updateSlotUI() { slotValues.forEach((v, i) => { const el = document.getElementById(`slot-${i}`); el.innerText = v; el.className = `flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl transition-all ${v>0 ? 'border-slate-800 bg-white' : 'border-slate-200 bg-slate-50'} ${i === activeSlot ? 'slot-active' : ''}`; }); }
-        function switchTab(t) { document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); document.querySelectorAll('nav button').forEach(b => b.classList.replace('text-rose-600', 'text-slate-400')); document.getElementById('tab-'+t).classList.add('active'); document.getElementById('nav-'+t).classList.replace('text-slate-400', 'text-rose-600'); }
-        function changeWeek(v) { currentWeekKey = v; updateSummaryTable(); updateStatsUI(); }
-        function toggleZoom() { document.documentElement.style.fontSize = document.documentElement.style.fontSize === '22px' ? '18px' : '22px'; }
-        
-        function submitBatch() { 
-            const p = document.getElementById('platformSelect').value; const vals = slotValues.filter(v=>v>0); if(!vals.length) return;
-            vals.forEach((v, i) => db.ref(`coupons/${currentWeekKey}/${Date.now()+i}`).set({ amount:v, member:currentUser, payment:p, used:false }));
-            slotValues=[0,0,0]; activeSlot=0; updateSlotUI();
-            const b = document.getElementById('submitBtn'); b.innerText = "成功 ✓"; b.classList.replace('bg-slate-800','bg-emerald-600');
-            setTimeout(() => { b.innerText = "📥 登記獎賞"; b.classList.replace('bg-emerald-600','bg-slate-800'); }, 1000);
+            document.getElementById('individualList').innerHTML = listHtml;
         }
 
         function updateStatsUI() {
             const mode = document.getElementById('statMode').value;
-            const res = { members: {}, platforms: {} }; MEMBERS.forEach(m => res.members[m] = { val: 0, platforms: {} });
-            const valid2026Keys = WEEK_DATA.map(w => w.key);
-
+            const res = {}; MEMBERS.forEach(m => res[m] = { platforms: {} });
             Object.keys(allCoupons).forEach(wk => {
                 if (mode === 'week' && wk !== currentWeekKey) return;
-                if (mode === 'grand' && !valid2026Keys.includes(wk)) return;
-
                 Object.values(allCoupons[wk]).forEach(c => {
                     const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                    const p = c.payment; const amt = parseFloat(c.amount) || 0;
-                    if (!res.members[m]) return;
-
-                    res.members[m].val += amt; if(!res.platforms[p]) res.platforms[p] = 0; res.platforms[p] += amt;
-                    if(!res.members[m].platforms[p]) res.members[m].platforms[p] = { rem: 0, used: 0, real: 0 };
-                    if(c.used) { res.members[m].platforms[p].used += amt; res.members[m].platforms[p].real += parseFloat(c.realPayPart || (amt*2)); }
-                    else { res.members[m].platforms[p].rem += amt; }
+                    if (!res[m]) return;
+                    if (!res[m].platforms[c.payment]) res[m].platforms[c.payment] = {用:0, 剩:0, 實:0};
+                    const d = res[m].platforms[c.payment];
+                    if(c.amount > 0) {
+                        if(c.used) { d.用 += c.amount; d.實 += parseFloat(c.realPayPart || (c.amount*2)); }
+                        else { d.剩 += c.amount; }
+                    }
                 });
             });
-
-            let king = "--", topP = "--", mxM = 0, mxP = 0;
-            MEMBERS.forEach(m => { if(res.members[m].val > mxM) { mxM = res.members[m].val; king = `${m}(${mxM})`; } });
-            Object.keys(res.platforms).forEach(p => { if(res.platforms[p] > mxP) { mxP = res.platforms[p]; topP = `${p}(${mxP})`; } });
-            document.getElementById('luckyKing').innerText = king; document.getElementById('topPlatform').innerText = topP;
-            
-            let h = ""; let gRem=0, gUsed=0, gReal=0;
+            let h = ""; let gU=0, gR=0, gP=0;
             MEMBERS.forEach(m => {
-                const pk = Object.keys(res.members[m].platforms); if(!pk.length) return;
-                let mr=0, mu=0, ml=0;
-                pk.forEach((p, i) => { 
-                    const d = res.members[m].platforms[p]; mr+=d.rem; mu+=d.used; ml+=d.real; 
-                    h += `<tr>${i===0?`<td rowspan="${pk.length+1}" class="text-${m} font-bold border-r">${m}</td>`:''}<td class="text-[13px] border-r px-1 font-medium">${p}</td><td class="font-mono">${d.used}</td><td class="font-mono">${d.rem}</td><td class="text-emerald-600 font-bold font-mono">${Math.round(d.real)}</td></tr>`; 
+                const pKeys = Object.keys(res[m].platforms); if(!pKeys.length) return;
+                let mu=0, mr=0, mp=0;
+                pKeys.forEach((p, i) => {
+                    const d = res[m].platforms[p]; mu+=d.用; mr+=d.剩; mp+=d.實;
+                    h += `<tr>${i===0?`<td rowspan="${pKeys.length+1}" class="text-${m} font-bold border-r">${m}</td>`:''}<td class="text-[12px] border-r">${p}</td><td>${d.用}/${d.剩}</td><td class="text-emerald-600 font-bold font-mono">${Math.round(mp)}</td></tr>`;
                 });
-                h += `<tr class="subtotal-row"><td class="text-[11px] border-r text-slate-400">小計</td><td class="font-mono text-center">${mu}</td><td class="font-mono text-center">${mr}</td><td class="text-emerald-700 font-black font-mono text-center">${Math.round(ml)}</td></tr>`;
-                gRem+=mr; gUsed+=mu; gReal+=ml;
+                h += `<tr class="subtotal-row"><td colspan="2" class="text-right px-2 text-[10px]">小計</td><td>${mu}/${mr}</td><td class="text-emerald-700">${Math.round(mp)}</td></tr>`;
+                gU+=mu; gR+=mr; gP+=mp;
             });
-            document.getElementById('memberTableBody').innerHTML = h || '<tr><td colspan="5" class="py-10">無數據</td></tr>';
-            document.getElementById('tableGrandTotal').innerHTML = `<tr class="grand-total-row"><td colspan="2" class="py-5 text-center">總計</td><td class="font-mono text-center">${gUsed}</td><td class="font-mono text-center">${gRem}</td><td class="text-emerald-400 text-2xl font-black font-mono text-center">${Math.round(gReal)}</td></tr>`;
+            document.getElementById('memberTableBody').innerHTML = h || '<tr><td colspan="4" class="py-10">無數據</td></tr>';
+            document.getElementById('tableGrandTotal').innerHTML = `<tr class="grand-total-row"><td>總計</td><td></td><td>${gU}/${gR}</td><td class="text-emerald-400 text-xl font-mono">${Math.round(gP)}</td></tr>`;
+        }
+
+        // --- 核心操作函數 ---
+        function selectUser(name) {
+            currentUser = name;
+            document.querySelectorAll('.member-btn').forEach(btn => {
+                btn.className = 'member-btn py-3 rounded-xl font-bold text-[11px] bg-slate-100';
+            });
+            document.getElementById(`btn-${name}`).classList.add(`active-${name}`);
+        }
+
+        function setSlotValue(v) {
+            slotValues[activeSlot] = v;
+            document.getElementById(`slot-${activeSlot}`).setAttribute('data-touched', 'true');
+            activeSlot = (activeSlot + 1) % 3;
+            updateSlotUI();
+        }
+
+        function updateSlotUI() { 
+            slotValues.forEach((v, i) => { 
+                const el = document.getElementById(`slot-${i}`); 
+                const isTouched = el.getAttribute('data-touched') === 'true';
+                el.innerText = (isTouched && v === 0) ? '謝謝' : v; 
+                el.className = `flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl transition-all ${isTouched ? (v===0?'border-slate-300 bg-slate-100 text-slate-400':'border-slate-800 bg-white text-slate-800') : 'border-slate-200 bg-slate-50 text-slate-300'} ${i === activeSlot ? 'border-rose-500 scale-105 shadow-md ring-4 ring-rose-50' : ''}`; 
+            }); 
+        }
+
+        function submitBatch() { 
+            const p = document.getElementById('platformSelect').value; 
+            let count = 0;
+            slotValues.forEach((v, i) => { 
+                if(document.getElementById(`slot-${i}`).getAttribute('data-touched') === 'true') {
+                    db.ref(`coupons/${currentWeekKey}/${Date.now()+i}`).set({ amount:v, member:currentUser, payment:p, used:false }); 
+                    count++;
+                }
+            }); 
+            if(count > 0) {
+                slotValues=[0,0,0]; activeSlot=0; 
+                [0,1,2].forEach(i => document.getElementById(`slot-${i}`).setAttribute('data-touched', 'false'));
+                updateSlotUI();
+                alert(`${currentUser} 的 ${count} 筆獎賞已登記！`);
+            } else {
+                alert('請先點選金額或謝謝參與');
+            }
+        }
+
+        function toggleFilter(type, val) { 
+            const set = (type === 'member') ? selectedMembers : selectedPlatforms; 
+            if (set.has(val)) set.delete(val); else set.add(val); 
+            document.querySelectorAll(`[data-val="${val}"]`).forEach(el => el.classList.toggle('active'));
+            updateSummaryTable(); 
+        }
+
+        function switchTab(t) { 
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); 
+            document.querySelectorAll('nav button').forEach(b => b.classList.replace('text-rose-600', 'text-slate-400')); 
+            document.getElementById('tab-'+t).classList.add('active'); 
+            document.getElementById('nav-'+t).classList.replace('text-slate-400', 'text-rose-600'); 
+            if(t==='stat') updateStatsUI(); 
+        }
+
+        function changeWeek(v) { currentWeekKey = v; updateSummaryTable(); updateStatsUI(); }
+        function deleteCoupon(id) { if(confirm('確定刪除？')) db.ref(`coupons/${currentWeekKey}/${id}`).remove(); }
+        function toggleCoupon(id) { const c = allCoupons[currentWeekKey][id]; if(c.amount === 0) return; const ns = !c.used; db.ref(`coupons/${currentWeekKey}/${id}`).update({ used: ns, realPayPart: ns ? (c.amount*2) : 0 }); }
+        function toggleCalc(s) { document.getElementById('calculatorModal').classList.toggle('hidden', !s); if(s) { document.getElementById('billAmount').value=''; document.getElementById('smartResult').classList.add('hidden'); } }
+        function toggleZoom() { document.documentElement.style.fontSize = document.documentElement.style.fontSize === '22px' ? '18px' : '22px'; }
+
+        function runSmartMatch() {
+            const bill = parseFloat(document.getElementById('billAmount').value) || 0;
+            const resArea = document.getElementById('smartResult');
+            if(bill <= 0) { resArea.classList.add('hidden'); return; }
+            resArea.classList.remove('hidden');
+            const av = [];
+            Object.values(allCoupons[currentWeekKey] || {}).forEach(c => {
+                const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
+                if(!c.used && c.amount > 0 && (selectedMembers.size===0 || selectedMembers.has(m))) av.push({...c, m});
+            });
+            av.sort((a,b)=>b.amount-a.amount);
+            let rem = bill, disc = 0, html = ""; window.tempMatched = [];
+            for(let c of av) { if(rem >= c.amount*3) { rem -= c.amount*3; html += `<div class="text-white text-xs bg-white/10 p-2 rounded-xl flex justify-between"><span>${c.m}·${c.payment}</span><span>-${c.amount}</span></div>`; window.tempMatched.push(c); } }
+            document.getElementById('smartPlanList').innerHTML = html || '<div class="text-slate-500 text-center py-4">無可用券</div>';
+        }
+
+        function applySmartRedeem() {
+            if(!window.tempMatched?.length) return;
+            const bill = parseFloat(document.getElementById('billAmount').value);
+            const totalC = window.tempMatched.reduce((a,b)=>a+b.amount,0);
+            window.tempMatched.forEach(t => db.ref(`coupons/${currentWeekKey}/${t.id}`).update({ used:true, realPayPart: (t.amount/totalC)*(bill-totalC) }));
+            toggleCalc(false);
         }
 
         db.ref('coupons').on('value', s => { allCoupons = s.val() || {}; updateSummaryTable(); updateStatsUI(); });
-        window.onload = () => {
-            const drp = document.getElementById('weekDropdown');
-            WEEK_DATA.forEach(w => { const o = document.createElement('option'); o.value = w.key; o.textContent = `2026 第 ${w.id} 週 (${w.range})`; drp.appendChild(o); });
+        window.onload = () => { 
+            const drp = document.getElementById('weekDropdown'); 
+            WEEK_DATA.forEach(w => { const o = document.createElement('option'); o.value = w.key; o.textContent = `2026 第 ${w.id} 週 (${w.range})`; drp.appendChild(o); }); 
+            autoJumpToCurrentWeek(); 
+            selectUser('爸爸'); // 默認選中
             updateSlotUI();
         };
     </script>
