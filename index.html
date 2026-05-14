@@ -508,13 +508,43 @@
         }
 
         db.ref('coupons').on('value', s => { allCoupons = s.val() || {}; updateSummaryTable(); updateStatsUI(); });
-        window.onload = () => { 
-            const drp = document.getElementById('weekDropdown'); 
-            WEEK_DATA.forEach(w => { const o = document.createElement('option'); o.value = w.key; o.textContent = `2026 第 ${w.id} 週 (${w.range})`; drp.appendChild(o); }); 
-            const now = new Date(); const found = WEEK_DATA.find(w => now >= w.start && now <= w.end);
-            if (found) { currentWeekKey = found.key; drp.value = found.key; }
-            selectUser('爸爸'); updateSlotUI(); renderFilters();
-        };
+        window.onload = () => {
+			const drp = document.getElementById('weekDropdown');
+			
+			// 1. 渲染下拉選單
+			WEEK_DATA.forEach(w => {
+				const o = document.createElement('option'); 
+				o.value = w.key;
+				o.textContent = `2026 第 ${w.id} 週 (${w.range})`;
+				drp.appendChild(o);
+			});
+		
+			// 2. 精確日期比對
+			const now = new Date();
+			// 建議將 now 的時間重置到當天起點，避免時分秒影響比較
+			const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		
+			const found = WEEK_DATA.find(w => {
+				const s = new Date(w.start);
+				const e = new Date(w.end);
+				// 確保比較的是日期的起點與終點
+				s.setHours(0,0,0,0);
+				e.setHours(23,59,59,999);
+				return today >= s && today <= e;
+			});
+		
+			if (found) {
+				currentWeekKey = found.key;
+				drp.value = found.key;
+				// 3. 重要：手動觸發一次切換邏輯，確保 Firebase 數據渲染到 UI
+				changeWeek(found.key);
+			}
+			
+			// 初始化其他 UI 組件
+			selectUser('爸爸');
+			updateSlotUI();
+			renderFilters();
+		};
     </script>
 </body>
 </html>
