@@ -300,12 +300,11 @@
     return { coupon, additionalSpend: fromCents(bestCents) };
   }
 
-  function planHousehold(total, firstSpend, entries, firstWallet, options = {}) {
+  function planHousehold(total, firstSpend, entries, options = {}) {
     const totalCents = toCents(total);
     const firstCents = toCents(firstSpend);
     const valid = Number.isFinite(totalCents) && Number.isFinite(firstCents) && totalCents >= 0 &&
-      firstCents >= 0 && (firstCents === 0 || firstCents >= 5000) && firstCents <= totalCents &&
-      (!firstCents || Boolean(firstWallet && firstWallet.member && firstWallet.payment));
+      firstCents >= 0 && firstCents <= totalCents;
     if (!valid) return { valid: false, total: Number(total), firstSpend: Number(firstSpend), remaining: 0, plans: [] };
 
     const selectedMembers = Array.isArray(options.selectedMembers) ? new Set(options.selectedMembers) : null;
@@ -318,7 +317,7 @@
     const merchantCoupons = scopedEntries.filter(validMerchantCoupon);
     const giftCoupons = scopedEntries.filter(coupon => coupon && coupon.type === 'gift' && !coupon.used);
     const remaining = fromCents(totalCents - firstCents);
-    const fallbackWallet = options.fallbackWallet || firstWallet;
+    const fallbackWallet = options.fallbackWallet || null;
     const noMerchant = optimizeRemaining(remaining, governmentCoupons, [], false, fallbackWallet);
     const plans = [];
 
@@ -350,7 +349,6 @@
       valid: true,
       total: fromCents(totalCents),
       firstSpend: fromCents(firstCents),
-      firstWallet: firstCents ? firstWallet : null,
       remaining,
       selectedMembers: selectedMembers ? [...selectedMembers] : null,
       selectedPayments: selectedPayments ? [...selectedPayments] : null,
@@ -420,12 +418,12 @@
       let selectedCalcPayments = [...WALLETS];
       let selectedVaultMembers = [...MEMBERS];
       let slotSelections = [null, null, null];
-      let firstSpendTouched = false;
       let allPeriodData = null;
       let allPeriodStatsLoading = false;
       let allPeriodStatsError = '';
       let allPeriodRequestId = 0;
       let lastCalculatedPlan = null;
+      let hasCalculatedResult = false;
       const cacheKey = 'macau-consume-2026r2-household';
       const settingsPath = 'campaigns/2026R2/settings/wallets';
       const weekPath = () => `campaigns/2026R2/weeks/${currentWeek}`;
@@ -502,7 +500,7 @@
       }
 
       function fillMemberSelects() {
-        for (const id of ['firstMember', 'recordMember']) {
+        for (const id of ['recordMember']) {
           const oldValue = $(id).value;
           fillSelect(id, MEMBERS.map(member => ({ value: member, label: member })), oldValue);
         }
@@ -561,14 +559,10 @@
       }
 
       function renderSelectors() {
-        const firstMember = $('firstMember').value || MEMBERS[0];
         const recordMember = $('recordMember').value || MEMBERS[0];
-        const firstWallet = $('firstWallet').value;
         const recordWallet = $('recordWallet').value;
         fillMemberSelects();
-        setWalletOptions('firstWallet', firstMember, firstWallet);
         setWalletOptions('recordWallet', recordMember, recordWallet);
-        if (!$('firstWallet').value && activeWallets(firstMember).length) $('firstWallet').value = activeWallets(firstMember)[0];
         if (!$('recordWallet').value && activeWallets(recordMember).length) $('recordWallet').value = activeWallets(recordMember)[0];
       }
 
@@ -642,11 +636,12 @@
       }
 
       function renderDrawStates() {
-        const totals = { govUnused: 0, govUsed: 0, merchant: 0, gift: 0, registered: 0, wallets: 0 };
+        const totals = { govAwarded: 0, govUnused: 0, govUsed: 0, merchantDrawn: 0, giftDrawn: 0, merchant: 0, gift: 0, registered: 0, wallets: 0 };
         const rows = [];
+        const compareRows = [];
 
         for (const member of MEMBERS) {
-          const memberTotals = { govUnused: 0, govUsed: 0, merchant: 0, gift: 0, registered: 0, wallets: 0 };
+          const memberTotals = { govAwarded: 0, govUnused: 0, govUsed: 0, merchantDrawn: 0, giftDrawn: 0, merchant: 0, gift: 0, registered: 0, wallets: 0 };
           for (const payment of activeWallets(member)) {
             totals.wallets++;
             memberTotals.wallets++;
@@ -662,14 +657,23 @@
             const government = records.filter(coupon => coupon.type === 'gov');
             const unusedAmount = government.filter(coupon => !coupon.used).reduce((sum, coupon) => sum + coupon.amount, 0);
             const usedAmount = government.filter(coupon => coupon.used).reduce((sum, coupon) => sum + coupon.amount, 0);
+            const awardedAmount = unusedAmount + usedAmount;
+            const merchantDrawn = records.filter(coupon => coupon.type === 'merchant').length;
+            const giftDrawn = records.filter(coupon => coupon.type === 'gift').length;
             const merchantCount = records.filter(coupon => coupon.type === 'merchant' && !coupon.used).length;
             const giftCount = records.filter(coupon => coupon.type === 'gift' && !coupon.used).length;
+            totals.govAwarded += awardedAmount;
             totals.govUnused += unusedAmount;
             totals.govUsed += usedAmount;
+            totals.merchantDrawn += merchantDrawn;
+            totals.giftDrawn += giftDrawn;
             totals.merchant += merchantCount;
             totals.gift += giftCount;
+            memberTotals.govAwarded += awardedAmount;
             memberTotals.govUnused += unusedAmount;
             memberTotals.govUsed += usedAmount;
+            memberTotals.merchantDrawn += merchantDrawn;
+            memberTotals.giftDrawn += giftDrawn;
             memberTotals.merchant += merchantCount;
             memberTotals.gift += giftCount;
             const results = records.length
@@ -699,7 +703,23 @@
             <td class="num" data-label="已核銷電子優惠">MOP ${formatMop(memberTotals.govUsed)}</td>
             <td data-label="已登記支付方式">${memberTotals.registered} / ${memberTotals.wallets} 已登記</td>
           </tr>`);
+          compareRows.push({ member, ...memberTotals });
         }
+
+        const maxAwarded = Math.max(0, ...compareRows.map(row => row.govAwarded));
+        $('memberCompare').innerHTML = `<table class="member-compare-table">
+          <thead><tr><th scope="col">家庭成員</th><th scope="col">電子券抽中總額</th><th scope="col">未核銷電子券</th><th scope="col">已核銷電子券</th><th scope="col">商戶券抽中</th><th scope="col">禮遇券抽中</th><th scope="col">已登記錢包</th></tr></thead>
+          <tbody>${compareRows.map(row => {
+            const meter = maxAwarded ? Math.round(row.govAwarded / maxAwarded * 100) : 0;
+            return `<tr>
+              <th scope="row">${escapeHtml(row.member)}</th>
+              <td class="num amount-cell"><strong>MOP ${formatMop(row.govAwarded)}</strong><span class="member-meter" aria-hidden="true"><span style="width:${meter}%"></span></span></td>
+              <td class="num">MOP ${formatMop(row.govUnused)}</td><td class="num">MOP ${formatMop(row.govUsed)}</td>
+              <td class="num">${row.merchantDrawn} 張</td><td class="num">${row.giftDrawn} 張</td><td class="num">${row.registered} / ${row.wallets}</td>
+            </tr>`;
+          }).join('')}</tbody>
+          <tfoot><tr><th scope="row">全家合計</th><td class="num">MOP ${formatMop(totals.govAwarded)}</td><td class="num">MOP ${formatMop(totals.govUnused)}</td><td class="num">MOP ${formatMop(totals.govUsed)}</td><td class="num">${totals.merchantDrawn} 張</td><td class="num">${totals.giftDrawn} 張</td><td class="num">${totals.registered} / ${totals.wallets}</td></tr></tfoot>
+        </table>`;
 
         $('drawStats').innerHTML = [
           stat('未核銷電子優惠', `MOP ${formatMop(totals.govUnused)}`),
@@ -952,14 +972,6 @@
         </section>`).join('');
       }
 
-      function refreshFirstDefault() {
-        const member = $('firstMember').value;
-        const payment = $('firstWallet').value;
-        if (member && payment) $('firstSpend').value = isDrawn(member, payment) ? '0' : '50';
-        firstSpendTouched = false;
-        renderCalc();
-      }
-
       function availableMerchantCoupons(members = selectedCalcMembers, payments = selectedCalcPayments) {
         return allWalletEntries().filter(coupon =>
           coupon.type === 'merchant' && !coupon.used && members.includes(coupon.member) && payments.includes(coupon.payment)
@@ -975,13 +987,28 @@
       }
 
       function renderCalc() {
+        const hadResults = hasCalculatedResult;
         lastCalculatedPlan = null;
+        const selectedMerchant = availableMerchantCoupons();
+        const merchantAvailable = $('merchantAvailable').checked;
+        const memberScope = selectedCalcMembers.length === MEMBERS.length ? '全家' : selectedCalcMembers.length ? selectedCalcMembers.join('、') : '未選家人';
+        const paymentScope = selectedCalcPayments.length === WALLETS.length ? '全部支付方式' : selectedCalcPayments.length ? selectedCalcPayments.join('、') : '未選支付方式';
+        $('merchantAvailability').textContent = `${memberScope}／${paymentScope}範圍內有 ${selectedMerchant.length} 張未核銷商戶券；${merchantAvailable ? '已勾選商戶可用，計算時會按庫存試算。' : '尚未勾選商戶可用，商戶券會保留。'}`;
+        $('plans').innerHTML = '';
+        $('plans').classList.remove('single-plan');
+        $('planSummary').className = 'notice neutral';
+        $('planSummary').textContent = hadResults
+          ? '條件已變更；按「計算用券方案」更新結果。'
+          : '填入計劃總消費額，再按「計算用券方案」查看結果。';
+      }
+
+      function calculatePlan() {
+        lastCalculatedPlan = null;
+        $('plans').innerHTML = '';
         const rawTotal = $('totalSpend').value;
-        const total = rawTotal === '' ? 0 : Number(rawTotal);
-        const firstSpend = Number($('firstSpend').value);
-        const member = $('firstMember').value;
-        const payment = $('firstWallet').value;
-        const drawn = Boolean(member && payment && isDrawn(member, payment));
+        const rawFirstSpend = $('firstSpend').value;
+        const total = rawTotal === '' ? NaN : Number(rawTotal);
+        const firstSpend = rawFirstSpend === '' ? 0 : Number(rawFirstSpend);
         const selectedMerchant = availableMerchantCoupons();
         const selectedGift = allWalletEntries().filter(coupon =>
           coupon.type === 'gift' && !coupon.used && selectedCalcMembers.includes(coupon.member) && selectedCalcPayments.includes(coupon.payment)
@@ -989,35 +1016,27 @@
         const merchantAvailable = $('merchantAvailable').checked;
         const memberScope = selectedCalcMembers.length === MEMBERS.length ? '全家' : selectedCalcMembers.length ? selectedCalcMembers.join('、') : '未選家人';
         const paymentScope = selectedCalcPayments.length === WALLETS.length ? '全部支付方式' : selectedCalcPayments.length ? selectedCalcPayments.join('、') : '未選支付方式';
-        $('merchantAvailability').textContent = `${memberScope}／${paymentScope}範圍內有 ${selectedMerchant.length} 張未核銷商戶券；${merchantAvailable ? '已勾選商戶可用，將自動按庫存試算。' : '尚未勾選商戶可用，商戶券會保留。'}`;
-        $('drawStatus').innerHTML = member && payment
-          ? `首單錢包：<strong>${escapeHtml(member)} · ${escapeHtml(payment)}</strong> · ${drawn ? '<span class="tag">已有結果紀錄</span>' : '<span class="tag muted-tag">未登記結果（按未抽處理）</span>'}${firstSpend === 0 && !drawn ? ' · 你填 0，表示本次不預留抽獎首單。' : ''}`
-          : '請先在家庭支付設定啟用首單支付方式。';
-        $('plans').innerHTML = '';
         if (rawTotal === '') {
-          $('planSummary').textContent = `輸入總消費額，系統會按${memberScope}及${paymentScope}的電子券、商戶券庫存試算。${selectedGift.length ? `另有 ${selectedGift.length} 張非現金禮遇券可按券面條件使用。` : ''}`;
-          return;
+          $('planSummary').textContent = '請先輸入計劃總消費額。';
+          return false;
         }
-        const firstWallet = firstSpend > 0 ? { member, payment } : null;
-        const plan = ConsumeCalc.planHousehold(total, firstSpend, allWalletEntries(), firstWallet, {
+        const plan = ConsumeCalc.planHousehold(total, firstSpend, allWalletEntries(), {
           selectedMembers: selectedCalcMembers,
           selectedPayments: selectedCalcPayments,
           merchantAvailable,
           fallbackWallet: fallbackWalletFor(selectedCalcMembers)
         });
         if (!plan.valid) {
-          $('planSummary').textContent = firstSpend > 0 && firstSpend < 50
-              ? '抽獎首單如大於 0，必須至少 MOP 50；已抽獎或不需抽可填 0。'
-            : firstSpend > total
-              ? '抽獎首單不能大於計劃總消費額。'
-              : '請檢查總消費額與首單金額。';
-          return;
+          $('planSummary').textContent = firstSpend > total
+            ? '已先消費金額不能大於計劃總消費額。'
+            : '請輸入有效的非負消費金額。';
+          return false;
         }
 
         const remaining = plan.remaining;
         const firstText = firstSpend > 0
-          ? `先由 ${member} · ${payment} 付 MOP ${formatMop(firstSpend)} 抽獎；`
-          : '首單填 0，本次不預留抽獎金額；';
+          ? `已先消費 MOP ${formatMop(firstSpend)}（不指定家人／支付方式）；`
+          : '已先消費 MOP 0；';
         const selectionText = `${memberScope}／${paymentScope}`;
         const merchantText = merchantAvailable
           ? selectedMerchant.length ? `商戶接受券，庫存 ${selectedMerchant.length} 張` : '商戶接受券，但所選家人沒有未核銷商戶券'
@@ -1025,7 +1044,10 @@
         const giftText = selectedGift.length ? `另有 ${selectedGift.length} 張禮遇券（不折算現金）` : '';
         $('planSummary').textContent = `${firstText}餘額 MOP ${formatMop(remaining)}；以${selectionText}的未核銷券分單。${merchantText}。${giftText}`;
         lastCalculatedPlan = plan;
+        hasCalculatedResult = true;
+        $('plans').classList.toggle('single-plan', plan.plans.length === 1);
         $('plans').innerHTML = plan.plans.map((option, index) => planCard(option, index, plan)).join('');
+        return true;
       }
 
       function planCard(option, index, plan) {
@@ -1069,7 +1091,7 @@
         if (option.exactMatch) thresholdHints.push('目前金額剛好達到本方案所用券的最低消費門檻。');
         const title = `${index === 0 ? '較省方案' : '比較方案'}：${option.merchantScenario ? `使用商戶券 ${option.merchantUsedCount} 張` : '保留商戶券'}`;
         const firstTransaction = plan.firstSpend
-          ? `<div class="transaction"><div class="transaction-title">抽獎首單：${escapeHtml(plan.firstWallet.member)} · ${escapeHtml(plan.firstWallet.payment)}　MOP ${formatMop(plan.firstSpend)}</div><div class="muted">首單不使用剛抽中的券。</div></div>`
+          ? `<div class="transaction"><div class="transaction-title">已先消費 MOP ${formatMop(plan.firstSpend)}</div><div class="muted">未指定家人或支付方式；這筆金額不使用本次分配的券。</div></div>`
           : '';
         const unallocated = option.unallocatedSpend > 0
           ? `<div class="transaction"><div class="transaction-title">尚無折扣的餘額　MOP ${formatMop(option.unallocatedSpend)}</div><div class="muted">未達用券條件的金額，可按實際情況選擇付款方式。</div></div>`
@@ -1082,7 +1104,7 @@
           : '';
         const unallocatedNote = option.unallocatedSpend > 0
           ? `另有 MOP ${formatMop(option.unallocatedSpend)} 尚未指定支付方式；此金額已計入全家預估自付額，但未分配至個別家人。`
-          : '首單金額計入首單成員的分配消費與預估自付；最低需消費只計入用券交易。';
+          : '已先消費金額（如有）會列為未指定家人的支出；最低需消費只計入用券交易。';
         return `<article class="plan-card ${index === 0 ? 'best' : ''}">
           <h3>${escapeHtml(title)}</h3>
           <div class="plan-amount-hero">
@@ -1113,8 +1135,8 @@
           return byMember.get(member);
         };
         selectedCalcMembers.forEach(ensure);
-        if (plan.firstSpend > 0 && plan.firstWallet) {
-          const first = ensure(plan.firstWallet.member);
+        if (plan.firstSpend > 0) {
+          const first = ensure('已先消費（未指定家人）');
           first.allocatedSpend += plan.firstSpend;
           first.outOfPocket += plan.firstSpend;
         }
@@ -1161,7 +1183,7 @@
         return `<section class="plan-breakdown" aria-label="每人及全家金額對照">
           <h4>金額對照</h4>
           <div class="breakdown-table-wrap"><table class="breakdown-table">
-            <thead><tr><th scope="col">家人</th><th scope="col">使用券折抵</th><th scope="col">最低需消費</th><th scope="col">分配消費</th><th scope="col">預估自付</th></tr></thead>
+          <thead><tr><th scope="col">家人／金額來源</th><th scope="col">使用券折抵</th><th scope="col">最低需消費</th><th scope="col">分配消費</th><th scope="col">預估自付</th></tr></thead>
             <tbody>${personRows}</tbody>
             <tfoot><tr><th scope="row">全家合計</th>${totalValues}</tr></tfoot>
           </table></div>
@@ -1251,7 +1273,6 @@
       function storeBatch(rows) {
         const updates = {};
         const timestamp = Date.now();
-        firstSpendTouched = true;
         for (const [index, row] of rows.entries()) {
           const id = `c${timestamp}${index}${Math.random().toString(36).slice(2, 8)}`;
           coupons[id] = { ...row, createdAt: timestamp };
@@ -1409,11 +1430,6 @@
             $('connection').textContent = '已連線';
             localData[currentWeek] = { coupons };
             try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* 本機空間不足時仍保留雲端資料 */ }
-            if (!firstSpendTouched) {
-              const member = $('firstMember').value;
-              const payment = $('firstWallet').value;
-              if (member && payment) $('firstSpend').value = isDrawn(member, payment) ? '0' : '50';
-            }
             render();
           }, () => {
             online = false;
@@ -1438,12 +1454,10 @@
         $('week').innerHTML = WEEKS.map(week => `<option value="${week.key}">${escapeHtml(week.label)}</option>`).join('');
         $('week').value = currentWeek;
         fillMemberSelects();
-        setWalletOptions('firstWallet', MEMBERS[0]);
         setWalletOptions('recordWallet', MEMBERS[0]);
         fillSelect('filterWallet', [{ value: 'all', label: '全部支付方式' }]
           .concat(WALLETS.map(wallet => ({ value: wallet, label: wallet }))), 'all');
         coupons = sanitizeCoupons(localData[currentWeek]?.coupons);
-        $('firstSpend').value = isDrawn($('firstMember').value, $('firstWallet').value) ? '0' : '50';
         renderSlotsAndFilters();
         render();
         setActiveTab('overview');
@@ -1455,10 +1469,6 @@
         invalidateAllPeriodStats();
         if (weekReference) weekReference.off();
         coupons = sanitizeCoupons(localData[currentWeek]?.coupons);
-        firstSpendTouched = false;
-        const member = $('firstMember').value;
-        const payment = $('firstWallet').value;
-        $('firstSpend').value = member && payment && isDrawn(member, payment) ? '0' : '50';
         render();
         if (database) {
           weekReference = database.ref(weekPath());
@@ -1470,11 +1480,6 @@
             $('connection').textContent = '已連線';
             localData[currentWeek] = { coupons };
             try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* 本機空間不足時仍保留雲端資料 */ }
-            if (!firstSpendTouched) {
-              const currentMember = $('firstMember').value;
-              const currentPayment = $('firstWallet').value;
-              $('firstSpend').value = currentMember && currentPayment && isDrawn(currentMember, currentPayment) ? '0' : '50';
-            }
             render();
           }, () => {
             online = false;
@@ -1483,21 +1488,19 @@
         }
       });
 
-      $('firstMember').addEventListener('change', () => {
-        setWalletOptions('firstWallet', $('firstMember').value);
-        refreshFirstDefault();
-      });
-      $('firstWallet').addEventListener('change', refreshFirstDefault);
       $('recordMember').addEventListener('change', () => {
         setWalletOptions('recordWallet', $('recordMember').value);
         renderRegistrationStatus();
       });
       $('recordWallet').addEventListener('change', renderRegistrationStatus);
-      $('totalSpend').addEventListener('input', renderCalc);
-      $('firstSpend').addEventListener('input', () => {
-        firstSpendTouched = true;
-        renderCalc();
+      $('calcForm').addEventListener('submit', event => {
+        event.preventDefault();
+        if (!calculatePlan()) return;
+        const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        $('calcResults').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
       });
+      $('totalSpend').addEventListener('input', renderCalc);
+      $('firstSpend').addEventListener('input', renderCalc);
       $('statMode').addEventListener('change', renderFunStats);
 
       $('calcMemberFilter').addEventListener('click', event => {
