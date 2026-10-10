@@ -309,7 +309,11 @@
     if (!valid) return { valid: false, total: Number(total), firstSpend: Number(firstSpend), remaining: 0, plans: [] };
 
     const selectedMembers = Array.isArray(options.selectedMembers) ? new Set(options.selectedMembers) : null;
-    const scopedEntries = (entries || []).filter(coupon => !selectedMembers || selectedMembers.has(coupon.member));
+    const selectedPayments = Array.isArray(options.selectedPayments) ? new Set(options.selectedPayments) : null;
+    const scopedEntries = (entries || []).filter(coupon =>
+      (!selectedMembers || selectedMembers.has(coupon.member)) &&
+      (!selectedPayments || selectedPayments.has(coupon.payment))
+    );
     const governmentCoupons = scopedEntries.filter(validGovernmentCoupon);
     const merchantCoupons = scopedEntries.filter(validMerchantCoupon);
     const giftCoupons = scopedEntries.filter(coupon => coupon && coupon.type === 'gift' && !coupon.used);
@@ -349,6 +353,7 @@
       firstWallet: firstCents ? firstWallet : null,
       remaining,
       selectedMembers: selectedMembers ? [...selectedMembers] : null,
+      selectedPayments: selectedPayments ? [...selectedPayments] : null,
       merchantAvailableCount: merchantCoupons.length,
       giftAvailableCount: giftCoupons.length,
       plans
@@ -412,6 +417,7 @@
       let localData = Object.create(null);
       let walletConfig = cloneDefaultWallets();
       let selectedCalcMembers = [...MEMBERS];
+      let selectedCalcPayments = [...WALLETS];
       let selectedVaultMembers = [...MEMBERS];
       let slotSelections = [null, null, null];
       let firstSpendTouched = false;
@@ -544,6 +550,7 @@
       function render() {
         renderSelectors();
         renderCalcMemberFilter();
+        renderCalcPaymentFilter();
         renderVaultMemberFilter();
         renderDrawStates();
         renderRegistrationStatus();
@@ -579,7 +586,42 @@
       }
 
       function renderCalcMemberFilter() {
-        renderMemberChips('calcMemberFilter', selectedCalcMembers, 'calc-member');
+        renderCalcSelection('calcMemberFilter', selectedCalcMembers, MEMBERS, 'member');
+      }
+
+      function renderCalcPaymentFilter() {
+        renderCalcSelection('calcPaymentFilter', selectedCalcPayments, WALLETS, 'payment');
+      }
+
+      function renderCalcSelection(containerId, selectedValues, choices, kind) {
+        const allSelected = selectedValues.length === choices.length;
+        const attribute = `data-calc-${kind}`;
+        $(containerId).innerHTML = `<div class="filter-actions">
+          <button class="filter-action" type="button" data-calc-filter-action="${kind}" data-selection="all" aria-pressed="${allSelected}">全選</button>
+          <button class="filter-action" type="button" data-calc-filter-action="${kind}" data-selection="clear" aria-pressed="${selectedValues.length === 0}">清除</button>
+          <span class="selection-count">${allSelected ? `已選全部 ${choices.length} 項` : `已選 ${selectedValues.length}／${choices.length} 項`}</span>
+        </div>
+        <div class="filter-chips">${choices.map(choice =>
+          `<button class="filter-chip" type="button" ${attribute}="${escapeHtml(choice)}" aria-pressed="${selectedValues.includes(choice)}">${escapeHtml(choice)}</button>`
+        ).join('')}</div>`;
+      }
+
+      function toggleCalcSelection(currentSelection, choice, choices) {
+        if (currentSelection.length === choices.length) return [choice];
+        const next = currentSelection.includes(choice)
+          ? currentSelection.filter(item => item !== choice)
+          : [...currentSelection, choice];
+        return choices.filter(item => next.includes(item));
+      }
+
+      function updateCalcSelection(kind, selection) {
+        const choices = kind === 'member' ? MEMBERS : WALLETS;
+        const next = selection === 'all' ? [...choices] : [];
+        if (kind === 'member') selectedCalcMembers = next;
+        else selectedCalcPayments = next;
+        renderCalcMemberFilter();
+        renderCalcPaymentFilter();
+        renderCalc();
       }
 
       function renderVaultMemberFilter() {
@@ -918,9 +960,9 @@
         renderCalc();
       }
 
-      function availableMerchantCoupons(members = selectedCalcMembers) {
+      function availableMerchantCoupons(members = selectedCalcMembers, payments = selectedCalcPayments) {
         return allWalletEntries().filter(coupon =>
-          coupon.type === 'merchant' && !coupon.used && members.includes(coupon.member)
+          coupon.type === 'merchant' && !coupon.used && members.includes(coupon.member) && payments.includes(coupon.payment)
         );
       }
 
@@ -941,20 +983,25 @@
         const payment = $('firstWallet').value;
         const drawn = Boolean(member && payment && isDrawn(member, payment));
         const selectedMerchant = availableMerchantCoupons();
-        const selectedGift = allWalletEntries().filter(coupon => coupon.type === 'gift' && !coupon.used && selectedCalcMembers.includes(coupon.member));
+        const selectedGift = allWalletEntries().filter(coupon =>
+          coupon.type === 'gift' && !coupon.used && selectedCalcMembers.includes(coupon.member) && selectedCalcPayments.includes(coupon.payment)
+        );
         const merchantAvailable = $('merchantAvailable').checked;
-        $('merchantAvailability').textContent = `${selectedCalcMembers.length === MEMBERS.length ? '全家' : selectedCalcMembers.join('、')}目前有 ${selectedMerchant.length} 張未核銷商戶券；${merchantAvailable ? '已勾選商戶可用，將自動按庫存試算。' : '尚未勾選商戶可用，商戶券會保留。'}`;
+        const memberScope = selectedCalcMembers.length === MEMBERS.length ? '全家' : selectedCalcMembers.length ? selectedCalcMembers.join('、') : '未選家人';
+        const paymentScope = selectedCalcPayments.length === WALLETS.length ? '全部支付方式' : selectedCalcPayments.length ? selectedCalcPayments.join('、') : '未選支付方式';
+        $('merchantAvailability').textContent = `${memberScope}／${paymentScope}範圍內有 ${selectedMerchant.length} 張未核銷商戶券；${merchantAvailable ? '已勾選商戶可用，將自動按庫存試算。' : '尚未勾選商戶可用，商戶券會保留。'}`;
         $('drawStatus').innerHTML = member && payment
           ? `首單錢包：<strong>${escapeHtml(member)} · ${escapeHtml(payment)}</strong> · ${drawn ? '<span class="tag">已有結果紀錄</span>' : '<span class="tag muted-tag">未登記結果（按未抽處理）</span>'}${firstSpend === 0 && !drawn ? ' · 你填 0，表示本次不預留抽獎首單。' : ''}`
           : '請先在家庭支付設定啟用首單支付方式。';
         $('plans').innerHTML = '';
         if (rawTotal === '') {
-          $('planSummary').textContent = `輸入總消費額，系統會按所選家人的電子券、商戶券庫存試算。${selectedGift.length ? `另有 ${selectedGift.length} 張非現金禮遇券可按券面條件使用。` : ''}`;
+          $('planSummary').textContent = `輸入總消費額，系統會按${memberScope}及${paymentScope}的電子券、商戶券庫存試算。${selectedGift.length ? `另有 ${selectedGift.length} 張非現金禮遇券可按券面條件使用。` : ''}`;
           return;
         }
         const firstWallet = firstSpend > 0 ? { member, payment } : null;
         const plan = ConsumeCalc.planHousehold(total, firstSpend, allWalletEntries(), firstWallet, {
           selectedMembers: selectedCalcMembers,
+          selectedPayments: selectedCalcPayments,
           merchantAvailable,
           fallbackWallet: fallbackWalletFor(selectedCalcMembers)
         });
@@ -971,7 +1018,7 @@
         const firstText = firstSpend > 0
           ? `先由 ${member} · ${payment} 付 MOP ${formatMop(firstSpend)} 抽獎；`
           : '首單填 0，本次不預留抽獎金額；';
-        const selectionText = selectedCalcMembers.length === MEMBERS.length ? '全家' : selectedCalcMembers.join('、');
+        const selectionText = `${memberScope}／${paymentScope}`;
         const merchantText = merchantAvailable
           ? selectedMerchant.length ? `商戶接受券，庫存 ${selectedMerchant.length} 張` : '商戶接受券，但所選家人沒有未核銷商戶券'
           : '本方案不使用商戶券';
@@ -982,6 +1029,7 @@
       }
 
       function planCard(option, index, plan) {
+        const breakdown = planBreakdown(option, plan);
         const transactions = option.transactions.map((transaction, transactionIndex) => {
           const governmentText = transaction.governmentCoupons.length
             ? `政府券 ${transaction.governmentCoupons.map(coupon => `MOP ${formatMop(coupon.amount)}`).join(' + ')}`
@@ -1032,16 +1080,93 @@
         const redeemButton = option.usedCouponIds.length
           ? `<div class="plan-actions"><button class="button" type="button" data-use-plan="${index}">確認核銷本方案（電子券 ${option.usedGovernmentCoupons.length} 張／商戶券 ${option.usedMerchantCoupons.length} 張）</button></div>`
           : '';
+        const unallocatedNote = option.unallocatedSpend > 0
+          ? `另有 MOP ${formatMop(option.unallocatedSpend)} 尚未指定支付方式；此金額已計入全家預估自付額，但未分配至個別家人。`
+          : '首單金額計入首單成員的分配消費與預估自付；最低需消費只計入用券交易。';
         return `<article class="plan-card ${index === 0 ? 'best' : ''}">
           <h3>${escapeHtml(title)}</h3>
-          ${firstTransaction}${transactions}${unallocated}
-          <div class="muted">${unused}</div>
-          ${giftNote}
-          ${thresholdHints.map(hint => `<div class="notice ${option.exactMatch ? 'neutral' : ''}">${hint}</div>`).join('')}
-          <div class="muted">政府券折扣 MOP ${formatMop(option.governmentDiscount)}；商戶折扣 MOP ${formatMop(option.merchantDiscount)}；分單 ${option.transactions.length} 筆</div>
-          <div class="plan-total"><span>全單實付</span><strong>MOP ${formatMop(option.totalPay)}</strong></div>
+          <div class="plan-amount-hero">
+            <span>全家預估自付</span>
+            <strong>MOP ${formatMop(option.totalPay)}</strong>
+            <small>計劃總消費 MOP ${formatMop(plan.total)} − 用券折抵 MOP ${formatMop(option.discount)}</small>
+          </div>
+          ${breakdown}
+          <p class="breakdown-note">${unallocatedNote} 用券折抵包含電子券面額及商戶券折扣。</p>
+          <details class="plan-details">
+            <summary>查看分單明細（${option.transactions.length} 筆）</summary>
+            <div class="plan-details-content">
+              ${firstTransaction}${transactions}${unallocated}
+              <div class="muted">${unused}</div>
+              ${giftNote}
+              ${thresholdHints.map(hint => `<div class="notice ${option.exactMatch ? 'neutral' : ''}">${hint}</div>`).join('')}
+              <div class="muted">政府券折扣 MOP ${formatMop(option.governmentDiscount)}；商戶折扣 MOP ${formatMop(option.merchantDiscount)}。</div>
+            </div>
+          </details>
           ${redeemButton}
         </article>`;
+      }
+
+      function planBreakdown(option, plan) {
+        const byMember = new Map();
+        const ensure = member => {
+          if (!byMember.has(member)) byMember.set(member, { member, voucherDiscount: 0, minimumSpend: 0, allocatedSpend: 0, outOfPocket: 0 });
+          return byMember.get(member);
+        };
+        selectedCalcMembers.forEach(ensure);
+        if (plan.firstSpend > 0 && plan.firstWallet) {
+          const first = ensure(plan.firstWallet.member);
+          first.allocatedSpend += plan.firstSpend;
+          first.outOfPocket += plan.firstSpend;
+        }
+        for (const transaction of option.transactions) {
+          const row = ensure(transaction.member);
+          const governmentDiscount = transaction.governmentCoupons.reduce((sum, coupon) => sum + Number(coupon.amount), 0);
+          row.voucherDiscount += governmentDiscount + transaction.merchantDiscount;
+          row.minimumSpend += transaction.minSpend;
+          row.allocatedSpend += transaction.spend;
+          row.outOfPocket += transaction.pay;
+        }
+        const rows = [...byMember.values()];
+        const totalMinimum = rows.reduce((sum, row) => sum + row.minimumSpend, 0);
+        const totalAllocated = rows.reduce((sum, row) => sum + row.allocatedSpend, 0);
+        const cells = row => `<td data-label="使用券折抵">MOP ${formatMop(row.voucherDiscount)}</td>
+          <td data-label="最低需消費">MOP ${formatMop(row.minimumSpend)}</td>
+          <td data-label="分配消費">MOP ${formatMop(row.allocatedSpend)}</td>
+          <td data-label="預估自付">MOP ${formatMop(row.outOfPocket)}</td>`;
+        const personRows = rows.length
+          ? rows.map(row => `<tr><th scope="row">${escapeHtml(row.member)}</th>${cells(row)}</tr>`).join('')
+          : '<tr><th scope="row">尚未選取家人</th><td colspan="4">請選擇家人或支付方式以查看明細。</td></tr>';
+        const mobileRows = rows.map(row => `<article class="breakdown-person-card">
+          <h4>${escapeHtml(row.member)}</h4>
+          <div class="breakdown-metrics">
+            <div><span>使用券折抵</span><strong>MOP ${formatMop(row.voucherDiscount)}</strong></div>
+            <div><span>最低需消費</span><strong>MOP ${formatMop(row.minimumSpend)}</strong></div>
+            <div><span>分配消費</span><strong>MOP ${formatMop(row.allocatedSpend)}</strong></div>
+            <div><span>預估自付</span><strong>MOP ${formatMop(row.outOfPocket)}</strong></div>
+          </div>
+        </article>`).join('');
+        const totalValues = `<td data-label="使用券折抵">MOP ${formatMop(option.discount)}</td>
+          <td data-label="最低需消費">MOP ${formatMop(totalMinimum)}</td>
+          <td data-label="分配消費">MOP ${formatMop(totalAllocated)}</td>
+          <td data-label="預估自付">MOP ${formatMop(option.totalPay)}</td>`;
+        const mobileTotal = `<article class="breakdown-total-card">
+          <h4>全家合計</h4>
+          <div class="breakdown-metrics">
+            <div><span>使用券折抵</span><strong>MOP ${formatMop(option.discount)}</strong></div>
+            <div><span>最低需消費</span><strong>MOP ${formatMop(totalMinimum)}</strong></div>
+            <div><span>分配消費</span><strong>MOP ${formatMop(totalAllocated)}</strong></div>
+            <div><span>預估自付</span><strong>MOP ${formatMop(option.totalPay)}</strong></div>
+          </div>
+        </article>`;
+        return `<section class="plan-breakdown" aria-label="每人及全家金額對照">
+          <h4>金額對照</h4>
+          <div class="breakdown-table-wrap"><table class="breakdown-table">
+            <thead><tr><th scope="col">家人</th><th scope="col">使用券折抵</th><th scope="col">最低需消費</th><th scope="col">分配消費</th><th scope="col">預估自付</th></tr></thead>
+            <tbody>${personRows}</tbody>
+            <tfoot><tr><th scope="row">全家合計</th>${totalValues}</tr></tfoot>
+          </table></div>
+          <div class="breakdown-mobile">${mobileRows || '<div class="empty">尚未選取家人。</div>'}${mobileTotal}</div>
+        </section>`;
       }
 
       async function redeemPlan(index) {
@@ -1239,6 +1364,10 @@
           button.classList.toggle('active', selected);
           button.setAttribute('aria-selected', String(selected));
         });
+        document.querySelectorAll('[data-nav]').forEach(button => {
+          if (button.dataset.nav === tab) button.setAttribute('aria-current', 'page');
+          else button.removeAttribute('aria-current');
+        });
         document.querySelectorAll('.panel').forEach(panel => {
           const selected = panel.id === tab;
           panel.classList.toggle('active', selected);
@@ -1317,6 +1446,7 @@
         $('firstSpend').value = isDrawn($('firstMember').value, $('firstWallet').value) ? '0' : '50';
         renderSlotsAndFilters();
         render();
+        setActiveTab('overview');
         initializeFirebase();
       }
 
@@ -1371,10 +1501,27 @@
       $('statMode').addEventListener('change', renderFunStats);
 
       $('calcMemberFilter').addEventListener('click', event => {
+        const action = event.target.closest('[data-calc-filter-action="member"]');
+        if (action) {
+          updateCalcSelection('member', action.dataset.selection);
+          return;
+        }
         const button = event.target.closest('[data-calc-member]');
         if (!button) return;
-        selectedCalcMembers = selectMembers(selectedCalcMembers, button.dataset.calcMember);
+        selectedCalcMembers = toggleCalcSelection(selectedCalcMembers, button.dataset.calcMember, MEMBERS);
         renderCalcMemberFilter();
+        renderCalc();
+      });
+      $('calcPaymentFilter').addEventListener('click', event => {
+        const action = event.target.closest('[data-calc-filter-action="payment"]');
+        if (action) {
+          updateCalcSelection('payment', action.dataset.selection);
+          return;
+        }
+        const button = event.target.closest('[data-calc-payment]');
+        if (!button) return;
+        selectedCalcPayments = toggleCalcSelection(selectedCalcPayments, button.dataset.calcPayment, WALLETS);
+        renderCalcPaymentFilter();
         renderCalc();
       });
       $('merchantAvailable').addEventListener('change', renderCalc);

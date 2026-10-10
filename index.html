@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#183b34">
-  <meta name="application-version" content="4.4">
+  <meta name="application-version" content="4.5">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.4">
+  <link rel="stylesheet" href="./style.css?v=4.5">
 </head>
 <body>
   <header class="hero">
@@ -33,12 +33,13 @@
     </div>
 
     <div class="tabs" role="tablist" aria-label="主要功能">
-      <button class="tab active" id="tab-use" data-panel="use" role="tab" aria-controls="use" aria-selected="true">本週／試算</button>
+      <button class="tab active" id="tab-week" data-panel="overview" role="tab" aria-controls="overview" aria-selected="true">本週概覽</button>
+      <button class="tab" id="tab-calc" data-panel="calc" role="tab" aria-controls="calc" aria-selected="false">試算</button>
       <button class="tab" id="tab-record" data-panel="record" role="tab" aria-controls="record" aria-selected="false">登記三券</button>
       <button class="tab" id="tab-home" data-panel="home" role="tab" aria-controls="home" aria-selected="false">家庭券庫</button>
     </div>
 
-    <section id="use" class="panel active" role="tabpanel" aria-labelledby="tab-use">
+    <section id="overview" class="panel active" role="tabpanel" aria-labelledby="tab-week">
       <div class="panel-layout">
         <article class="card">
           <h2>本週抽獎登記狀態</h2>
@@ -47,48 +48,60 @@
           <div id="drawStates" class="table-scroll" role="region" aria-label="本週各家庭成員支付方式抽獎狀態表" tabindex="0"></div>
           <p class="table-hint">未登記代表該成員／支付方式本週尚無結果。手機版會整理成券卡，並保留每位家人的小計。</p>
         </article>
-
-        <article class="card">
-          <h2>家庭分單試算</h2>
-          <p class="lead">可選全家或指定家人；電子券按各自支付方式分單，商戶券數量由券庫自動計算。</p>
-          <div class="grid">
-            <div class="field">
-              <label for="totalSpend">計劃總消費額（MOP）</label>
-              <input id="totalSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" placeholder="例如 181">
-            </div>
-            <div class="field">
-              <label for="firstSpend">抽獎首單金額（MOP）</label>
-              <input id="firstSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" value="50">
-              <div class="hint">已抽獎或本次不抽可填 0；新抽獎需至少 MOP 50。登記新券後會保留此首單金額供同一筆消費分單；開始新消費請填 0。</div>
-            </div>
-            <div class="field">
-              <label for="firstMember">首單成員</label>
-              <select id="firstMember" class="control"></select>
-            </div>
-            <div class="field">
-              <label for="firstWallet">首單支付方式</label>
-              <select id="firstWallet" class="control"></select>
-            </div>
-            <div class="field span-all">
-              <span class="filter-label">本次使用哪些家庭成員的政府券？</span>
-              <div id="calcMemberFilter" class="filter-chips" aria-label="試算家庭成員多選"></div>
-              <div class="hint">預設全家；先按「全家」以外的成員可改成單人，再逐位加入其他家人。</div>
-            </div>
-            <div class="field span-all">
-              <label class="merchant-toggle" for="merchantAvailable">
-                <input id="merchantAvailable" type="checkbox">
-                <span>這家商戶提供 MOP 100 減 MOP 12 商戶券</span>
-              </label>
-              <div id="merchantAvailability" class="hint" aria-live="polite"></div>
-              <div class="hint">每張已登記商戶券最多用一次、每筆交易最多一張；原始消費須滿 MOP 100。扣 MOP 12 後再計算該筆政府券門檻。</div>
-            </div>
-          </div>
-          <div id="drawStatus" class="statusline" aria-live="polite"></div>
-          <div id="planSummary" class="notice neutral" aria-live="polite">輸入總消費額，系統會按所選家人的本週未核銷獎券計算。</div>
-          <div id="plans" class="result-cards"></div>
-          <p class="hint">首單抽獎消費不套用剛抽中的券。商戶優惠是否適用及實際核銷，仍以商戶與支付平台當時規則為準。</p>
-        </article>
       </div>
+    </section>
+
+    <section id="calc" class="panel" role="tabpanel" aria-labelledby="tab-calc">
+      <article class="card">
+        <h2>家庭分單試算</h2>
+        <p class="lead">可多選家人與支付方式；每個方案會並列各人的用券折抵、最低需消費、分配消費與預估自付額，並提供全家合計。</p>
+        <div class="grid">
+          <div class="field">
+            <label for="totalSpend">計劃總消費額（MOP）</label>
+            <input id="totalSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" placeholder="例如 181">
+          </div>
+          <div class="field">
+            <label for="firstSpend">抽獎首單金額（MOP）</label>
+            <input id="firstSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" value="50">
+            <div class="hint">已抽獎或本次不抽可填 0；新抽獎需至少 MOP 50。登記新券後會保留此首單金額供同一筆消費分單；開始新消費請填 0。</div>
+          </div>
+          <div class="field">
+            <label for="firstMember">首單成員</label>
+            <select id="firstMember" class="control"></select>
+          </div>
+          <div class="field">
+            <label for="firstWallet">首單支付方式</label>
+            <select id="firstWallet" class="control"></select>
+          </div>
+          <details class="calc-filters field span-all">
+            <summary>篩選家人與支付方式 <span>預設全家／全部支付方式</span></summary>
+            <div class="grid calc-filter-grid">
+              <div class="field">
+                <span class="filter-label">試算家人（可多選）</span>
+                <div id="calcMemberFilter" class="choice-filter" role="group" aria-label="試算家庭成員多選"></div>
+                <div class="hint">清除後不使用任何家人的券；先選單一成員即可快速切換，再逐位加入其他家人。</div>
+              </div>
+              <div class="field">
+                <span class="filter-label">試算支付方式（可多選）</span>
+                <div id="calcPaymentFilter" class="choice-filter" role="group" aria-label="試算支付方式多選"></div>
+                <div class="hint">此篩選會同時套用至所選家人；清除後不使用任何支付方式的券。</div>
+              </div>
+            </div>
+          </details>
+          <div class="field span-all">
+            <label class="merchant-toggle" for="merchantAvailable">
+              <input id="merchantAvailable" type="checkbox">
+              <span>這家商戶提供 MOP 100 減 MOP 12 商戶券</span>
+            </label>
+            <div id="merchantAvailability" class="hint" aria-live="polite"></div>
+            <div class="hint">每張已登記商戶券最多用一次、每筆交易最多一張；原始消費須滿 MOP 100。扣 MOP 12 後再計算該筆政府券門檻。</div>
+          </div>
+        </div>
+        <div id="drawStatus" class="statusline" aria-live="polite"></div>
+        <div id="planSummary" class="notice neutral" aria-live="polite">輸入總消費額，系統會按所選家人與支付方式的本週未核銷獎券計算。</div>
+        <div id="plans" class="result-cards"></div>
+        <p class="hint">首單抽獎消費不套用剛抽中的券。商戶優惠是否適用及實際核銷，仍以商戶與支付平台當時規則為準。</p>
+      </article>
     </section>
 
     <section id="record" class="panel" role="tabpanel" aria-labelledby="tab-record">
@@ -170,12 +183,13 @@
   </main>
 
   <nav class="bottom-nav" aria-label="底部導覽">
-    <button class="button secondary" data-nav="use" type="button">本週／試算</button>
+    <button class="button secondary" data-nav="overview" type="button">本週</button>
+    <button class="button secondary" data-nav="calc" type="button">試算</button>
     <button class="button secondary" data-nav="record" type="button">登記三券</button>
     <button class="button secondary" data-nav="home" type="button">家庭券庫</button>
   </nav>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-  <script src="./script.js?v=4.4"></script>
+  <script src="./script.js?v=4.5"></script>
 </body>
 </html>
