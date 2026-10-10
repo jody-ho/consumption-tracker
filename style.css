@@ -303,6 +303,9 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .next-coupon-hints li { display: grid; gap: 3px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.72); }
 .next-coupon-hints strong { color: var(--pine-950); font-size: 13px; line-height: 1.45; }
 .next-coupon-hints small { color: var(--muted); font-size: 11px; }
+.next-coupon-hints.exact-fit { border-color: #bad7c5; background: #f0f8f2; }
+.next-coupon-hints.exact-fit h4 { color: #345f45; }
+.next-coupon-hints.exact-fit p { margin: 0; color: #486451; font-size: 13px; }
 .plan-breakdown { margin-top: 12px; }
 .plan-breakdown h4 { margin: 0 0 8px; color: var(--pine-950); font-size: 14px; }
 .breakdown-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid #dfe6dd; border-radius: 13px; background: var(--card); -webkit-overflow-scrolling: touch; overscroll-behavior-inline: contain; }

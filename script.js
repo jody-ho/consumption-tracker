@@ -127,19 +127,23 @@
     const budgetCents = toCents(amount);
     if (!Number.isFinite(budgetCents) || budgetCents < 0) return null;
     const stock = Array.isArray(merchantStock) ? merchantStock.filter(validMerchantCoupon) : [];
-    const merchantStockByPayment = new Map();
-    for (const coupon of stock) {
-      const payment = String(coupon.payment || '').trim();
-      if (!merchantStockByPayment.has(payment)) merchantStockByPayment.set(payment, []);
-      merchantStockByPayment.get(payment).push(coupon);
-    }
-    const governmentGroupsByPayment = new Map();
-    for (const group of groupGovernmentCoupons(governmentEntries)) {
-      if (!governmentGroupsByPayment.has(group.payment)) governmentGroupsByPayment.set(group.payment, []);
-      governmentGroupsByPayment.get(group.payment).push(group);
-    }
-    const paymentOrder = [...new Set([...governmentGroupsByPayment.keys(), ...merchantStockByPayment.keys()])];
     const fallback = normalizeFallbackWallet(fallbackWallet);
+    const walletKey = (member, payment) => `${String(member || '').trim()}\u001f${String(payment || '').trim()}`;
+    const merchantStockByWallet = new Map();
+    for (const coupon of stock) {
+      const member = String(coupon.member || fallback.member).trim();
+      const payment = String(coupon.payment || '').trim();
+      const key = walletKey(member, payment);
+      if (!merchantStockByWallet.has(key)) merchantStockByWallet.set(key, []);
+      merchantStockByWallet.get(key).push(coupon);
+    }
+    const governmentGroupsByWallet = new Map();
+    for (const group of groupGovernmentCoupons(governmentEntries)) {
+      const key = walletKey(group.member, group.payment);
+      if (!governmentGroupsByWallet.has(key)) governmentGroupsByWallet.set(key, []);
+      governmentGroupsByWallet.get(key).push(group);
+    }
+    const walletOrder = [...new Set([...governmentGroupsByWallet.keys(), ...merchantStockByWallet.keys()])];
     let states = new Map([['0|0', {
       costCents: 0,
       discountCents: 0,
@@ -148,8 +152,10 @@
       transactions: []
     }]]);
 
-    for (const payment of paymentOrder) {
-      const paymentStock = merchantStockByPayment.get(payment) || [];
+    for (const wallet of walletOrder) {
+      const paymentStock = merchantStockByWallet.get(wallet) || [];
+      const governmentGroups = governmentGroupsByWallet.get(wallet) || [];
+      const payment = String(governmentGroups[0]?.payment || paymentStock[0]?.payment || '').trim();
       const merchantLimit = Math.min(paymentStock.length, Math.floor(budgetCents / MERCHANT_MIN_CENTS));
       let paymentStates = new Map([['0|0', {
         costCents: 0,
@@ -159,7 +165,7 @@
         transactions: []
       }]]);
 
-      for (const group of governmentGroupsByPayment.get(payment) || []) {
+      for (const group of governmentGroups) {
         const choices = groupChoices(group, merchantLimit);
         const next = new Map(paymentStates);
         for (const state of paymentStates.values()) {
@@ -396,6 +402,7 @@
       option.unusedGiftCoupons = giftCoupons;
     }
     plans.sort((a, b) => a.totalPay - b.totalPay || a.merchantUsedCount - b.merchantUsedCount || a.transactions.length - b.transactions.length);
+    const lowestPayPlan = plans[0] || null;
 
     return {
       valid: true,
@@ -406,7 +413,7 @@
       selectedPayments: selectedPayments ? [...selectedPayments] : null,
       merchantAvailableCount: merchantCoupons.length,
       giftAvailableCount: giftCoupons.length,
-      plans
+      plans: lowestPayPlan ? [lowestPayPlan] : []
     };
   }
 
@@ -1126,6 +1133,9 @@
       }
 
       function nextCouponHints(option) {
+        if (option.exactMatch) {
+          return '<aside class="next-coupon-hints exact-fit" aria-label="剛好用盡預算"><h4>剛剛好</h4><p>本方案剛好用盡本次預算。</p></aside>';
+        }
         const items = [];
         if (option.nextCoupon) {
           const { coupon, additionalSpend } = option.nextCoupon;
@@ -1165,7 +1175,7 @@
         if (option.unusedCoupons.length) unusedParts.push(`未用電子券：${option.unusedCoupons.map(coupon => `${escapeHtml(coupon.member)} · ${escapeHtml(coupon.payment)} MOP ${formatMop(coupon.amount)}`).join('、')}`);
         if (option.unusedMerchantCoupons.length) unusedParts.push(`未用商戶券：${option.unusedMerchantCoupons.map(coupon => `${escapeHtml(coupon.member)} · ${escapeHtml(coupon.payment)}`).join('、')}`);
         const unused = unusedParts.length ? unusedParts.join('；') : '此方案沒有剩餘未核銷電子券／商戶券。';
-        const title = `${index === 0 ? '較省方案' : '比較方案'}：${option.merchantScenario ? `使用商戶券 ${option.merchantUsedCount} 張` : '保留商戶券'}`;
+        const title = '最低實付方案';
         const firstTransaction = plan.firstSpend
           ? `<div class="transaction"><div class="transaction-title">已先消費 MOP ${formatMop(plan.firstSpend)}</div><div class="muted">未指定家人或支付方式；這筆金額不使用本次分配的券。</div></div>`
           : '';
