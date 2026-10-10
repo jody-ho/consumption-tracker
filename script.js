@@ -1125,6 +1125,26 @@
         return true;
       }
 
+      function nextCouponHints(option) {
+        const items = [];
+        if (option.nextCoupon) {
+          const { coupon, additionalSpend } = option.nextCoupon;
+          const message = Number(additionalSpend) > 0
+            ? `再消費 MOP ${formatMop(additionalSpend)}，可多用一張 MOP ${formatMop(coupon.amount)} 電子券`
+            : `目前預算內可多用一張 MOP ${formatMop(coupon.amount)} 電子券`;
+          items.push(`<li><strong>${message}</strong><small>來源：${escapeHtml(coupon.member || '未指定家人')} · ${escapeHtml(coupon.payment || '未指定支付方式')}</small></li>`);
+        }
+        if (option.nextMerchant) {
+          const { coupon, additionalSpend } = option.nextMerchant;
+          const message = Number(additionalSpend) > 0
+            ? `再消費 MOP ${formatMop(additionalSpend)}，可多用一張 MOP 100 減 MOP 12 商戶券`
+            : '目前預算內可多用一張 MOP 100 減 MOP 12 商戶券';
+          items.push(`<li><strong>${message}</strong><small>來源：${escapeHtml(coupon.member || '未指定家人')} · ${escapeHtml(coupon.payment || '未指定支付方式')}</small></li>`);
+        }
+        if (!items.length) return '';
+        return `<aside class="next-coupon-hints" aria-label="再消費可使用的下一張券"><h4>再消費可多用一張券</h4><ul>${items.join('')}</ul></aside>`;
+      }
+
       function planCard(option, index, plan) {
         const transactions = option.transactions.map((transaction, transactionIndex) => {
           const governmentText = transaction.governmentCoupons.length
@@ -1165,6 +1185,7 @@
             <strong>MOP ${formatMop(option.totalPay)}</strong>
             <small>計劃總消費 MOP ${formatMop(plan.total)} − 用券折抵 MOP ${formatMop(option.discount)}</small>
           </div>
+          ${nextCouponHints(option)}
           ${planBreakdown(option, plan)}
           <p class="breakdown-note">支付金額為折扣前的交易金額；折扣金額包含電子券面額及商戶券折扣，實花金額為折抵後金額。手機可左右滑動查看全部欄位。</p>
           <details class="plan-details">

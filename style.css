@@ -297,6 +297,12 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .plan-amount-hero > span { color: #53685a; font-size: 13px; font-weight: 800; }
 .plan-amount-hero > strong { color: var(--pine-950); font-size: clamp(28px,3vw,36px); font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1.2; }
 .plan-amount-hero > small { margin-top: 3px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.next-coupon-hints { margin: -2px 0 14px; padding: 12px 14px; border: 1px solid #eadbb8; border-radius: 14px; background: #fbf5e7; }
+.next-coupon-hints h4 { margin: 0 0 8px; color: #6d501e; font-size: 13px; }
+.next-coupon-hints ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.next-coupon-hints li { display: grid; gap: 3px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.72); }
+.next-coupon-hints strong { color: var(--pine-950); font-size: 13px; line-height: 1.45; }
+.next-coupon-hints small { color: var(--muted); font-size: 11px; }
 .plan-breakdown { margin-top: 12px; }
 .plan-breakdown h4 { margin: 0 0 8px; color: var(--pine-950); font-size: 14px; }
 .breakdown-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid #dfe6dd; border-radius: 13px; background: var(--card); -webkit-overflow-scrolling: touch; overscroll-behavior-inline: contain; }
