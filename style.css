@@ -139,8 +139,6 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .calc-submit-row { display: flex; align-items: center; gap: 13px; margin-top: 16px; }
 .calc-submit-row .button { min-width: 220px; }
 .calc-results { margin-top: 22px; scroll-margin-top: 14px; }
-.result-member-controls { display: flex; align-items: center; gap: 10px; margin-top: 13px; }
-.result-member-controls .hint { margin: 0; }
 .section-heading { margin: 17px 0 10px; color: var(--pine-950); font-size: 17px; font-weight: 850; }
 .panel { display: none; }
 .panel.active { display: block; animation: panel-in .18s ease-out; }
@@ -292,7 +290,6 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .slot-state { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .result-cards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 13px; margin-top: 16px; }
 .result-cards.single-plan { grid-template-columns: 1fr; }
-#plans:not(.show-all-members) .zero-amount-member { display: none; }
 .plan-card { min-width: 0; padding: 18px; border: 1px solid #dfe5dc; border-radius: 17px; background: #fbfcf8; }
 .plan-card.best { border: 2px solid #7fa28a; background: linear-gradient(145deg,#f3f8f1,#eaf2e9); box-shadow: 0 7px 18px rgba(49,92,67,.08); }
 .plan-card h3 { margin: 0 0 11px; color: var(--pine-950); font-size: 17px; }
@@ -302,24 +299,21 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .plan-amount-hero > small { margin-top: 3px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .plan-breakdown { margin-top: 12px; }
 .plan-breakdown h4 { margin: 0 0 8px; color: var(--pine-950); font-size: 14px; }
-.breakdown-table-wrap { overflow-x: auto; border: 1px solid #dfe6dd; border-radius: 13px; background: var(--card); -webkit-overflow-scrolling: touch; }
-.breakdown-table { width: 100%; min-width: 570px; border-collapse: collapse; font-size: 12px; }
-.breakdown-table th, .breakdown-table td { padding: 10px 9px; border-bottom: 1px solid #e8ece6; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.breakdown-table thead th { background: #edf3eb; color: #52675a; font-size: 11px; font-weight: 800; }
-.breakdown-table thead th:first-child, .breakdown-table tbody th, .breakdown-table tfoot th { text-align: left; }
-.breakdown-table tbody th { color: var(--pine-900); font-weight: 800; }
+.breakdown-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid #dfe6dd; border-radius: 13px; background: var(--card); -webkit-overflow-scrolling: touch; overscroll-behavior-inline: contain; }
+.breakdown-table-wrap:focus-visible { outline: 3px solid #9ab6a0; outline-offset: 2px; }
+.breakdown-table { width: 100%; min-width: 540px; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.breakdown-table th, .breakdown-table td { padding: 10px 9px; border-bottom: 1px solid #e8ece6; text-align: right; white-space: nowrap; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.breakdown-table thead th { position: sticky; top: 0; z-index: 2; background: #edf3eb; color: #52675a; font-size: 11px; font-weight: 800; }
+.breakdown-table thead th:first-child { left: 0; z-index: 4; min-width: 190px; text-align: left; }
+.breakdown-table thead th:not(:first-child) { min-width: 112px; }
+.breakdown-table tbody th { position: sticky; left: 0; z-index: 1; background: var(--card); color: var(--pine-900); font-weight: 800; text-align: left; }
+.breakdown-table tbody tr.payment-detail-row:nth-child(even) { background: #fbfcf8; }
+.breakdown-table tbody tr.member-subtotal th, .breakdown-table tbody tr.member-subtotal td { border-bottom: 2px solid #d3dfd2; background: #eaf1e8; color: var(--pine-900); font-weight: 800; }
+.breakdown-table tbody tr.member-subtotal th { border-left: 3px solid #71927a; }
+.breakdown-table tbody tr.unassigned-row th { background: #f8faf6; color: var(--muted); font-weight: 700; }
+.breakdown-table .empty-row td { color: var(--muted); text-align: center; }
 .breakdown-table tfoot th, .breakdown-table tfoot td { border-bottom: 0; background: var(--pine-950); color: #fffdf6; font-weight: 850; }
-.breakdown-mobile { display: none; }
-.breakdown-person-card, .breakdown-total-card { padding: 12px; border: 1px solid #dfe6dd; border-radius: 14px; background: var(--card); }
-.breakdown-person-card h4, .breakdown-total-card h4 { margin: 0 0 8px; color: var(--pine-900); font-size: 14px; }
-.breakdown-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
-.breakdown-metrics > div { min-width: 0; padding: 9px; border-radius: 10px; background: #f4f7f2; }
-.breakdown-metrics span { display: block; color: var(--muted); font-size: 11px; }
-.breakdown-metrics strong { display: block; margin-top: 2px; color: var(--pine-950); font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.breakdown-total-card { border-color: var(--pine-950); background: var(--pine-950); }
-.breakdown-total-card h4, .breakdown-total-card .breakdown-metrics strong { color: #fffdf6; }
-.breakdown-total-card .breakdown-metrics > div { background: rgba(255,255,255,.10); }
-.breakdown-total-card .breakdown-metrics span { color: #d8e5d9; }
+.breakdown-table tfoot th:first-child { position: sticky; left: 0; z-index: 1; text-align: left; }
 .breakdown-note { margin: 9px 1px 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .plan-details { margin-top: 12px; border: 1px solid #dfe6dd; border-radius: 13px; background: rgba(255,255,255,.62); }
 .plan-details summary { min-height: 44px; padding: 11px 13px; color: var(--pine-900); font-size: 13px; font-weight: 800; cursor: pointer; }
@@ -387,8 +381,6 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
   .weekly-table tfoot tr.family-total td { background: transparent; }
   .table-hint { margin-top: 10px; }
   .coupon-list, .result-cards { grid-template-columns: 1fr; }
-  .breakdown-table-wrap { display: none; }
-  .breakdown-mobile { display: grid; gap: 8px; }
 }
 @media (max-width: 620px) {
   .shell { width: min(100% - 24px,1160px); }
@@ -415,8 +407,6 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
   .calc-submit-row { align-items: stretch; flex-direction: column; gap: 7px; }
   .calc-submit-row .button { width: 100%; }
   .calc-submit-row .hint { text-align: center; }
-  .result-member-controls { align-items: stretch; flex-direction: column; }
-  .result-member-controls .button { width: 100%; }
   .span-all { grid-column: auto; }
   .control { min-height: 50px; font-size: 16px; }
   .button { min-height: 48px; }
