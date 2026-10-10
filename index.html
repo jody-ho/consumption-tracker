@@ -9,7 +9,7 @@
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.6">
+  <link rel="stylesheet" href="./style.css?v=4.6.1">
 </head>
 <body>
   <header class="hero">
@@ -45,16 +45,24 @@
           <h2>本週抽獎登記狀態</h2>
           <p class="lead">先比較每位家人本週抽中的電子券金額與券數；需要追查支付方式時，再展開抽獎明細。</p>
           <h3 class="section-heading">家庭成員本週抽中比較</h3>
-          <div id="memberCompare" class="member-compare-scroll" role="region" aria-label="本週家庭成員抽中金額比較表" tabindex="0"></div>
-          <p class="table-hint">電子券抽中總額包含已核銷與未核銷；手機版可左右滑動比較，商戶券與禮遇券以張數顯示。</p>
-          <div id="drawStats" class="stats" aria-live="polite"></div>
-          <details class="weekly-details">
-            <summary>查看按支付方式的抽獎明細 <span>包含三次結果與每位家人小計</span></summary>
-            <div id="drawStates" class="table-scroll" role="region" aria-label="本週各家庭成員支付方式抽獎狀態表" tabindex="0"></div>
-            <p class="table-hint">未登記代表該成員／支付方式本週尚無結果；明細保留各支付方式的券結果、核銷狀態與全家總計。</p>
+            <div id="memberCompare" class="member-compare-scroll" role="region" aria-label="本週家庭成員抽中金額比較表" tabindex="0"></div>
+            <p class="table-hint">電子券抽中總額包含已核銷與未核銷；手機版可左右滑動比較，商戶券與禮遇券以張數顯示。</p>
+            <div id="drawStats" class="stats" aria-live="polite"></div>
+            <details class="weekly-details">
+            <summary>查看「已抽」與「未抽」支付方式 <span>分開檢視券額及尚未抽的方式</span></summary>
+            <section class="weekly-result-group" aria-labelledby="drawnHeading">
+              <h4 class="weekly-result-title" id="drawnHeading">已抽（含部分登記）</h4>
+              <div id="drawnStates" class="weekly-detail-scroll" role="region" aria-label="按家庭成員及支付方式分類的已抽結果" tabindex="0"></div>
+              <p class="table-hint">電子券抽中總額包含已核銷與未核銷；保留券種及登記進度。</p>
+            </section>
+            <section class="weekly-result-group" aria-labelledby="undrawnHeading">
+              <h4 class="weekly-result-title" id="undrawnHeading">未抽／未登記</h4>
+              <div id="undrawnStates" class="weekly-detail-scroll" role="region" aria-label="按家庭成員及支付方式分類的未抽方式" tabindex="0"></div>
+              <p class="table-hint">只列已啟用但本週尚無任何結果的支付方式；部分登記方式列於「已抽」。手機版可左右滑動表格。</p>
+            </section>
           </details>
-        </article>
-      </div>
+          </article>
+        </div>
     </section>
 
     <section id="calc" class="panel" role="tabpanel" aria-labelledby="tab-calc">
@@ -104,6 +112,10 @@
         <section id="calcResults" class="calc-results" aria-label="用券試算結果">
           <h3 class="section-heading">計算結果</h3>
           <div id="planSummary" class="notice neutral" aria-live="polite">填入計劃總消費額，再按「計算用券方案」。</div>
+          <div id="resultMemberControls" class="result-member-controls hidden">
+            <button id="toggleResultMembers" class="button secondary small" type="button" aria-controls="plans" aria-pressed="false">顯示全部家人</button>
+            <span class="hint">預設隱藏預估自付為 MOP 0 的家人；此切換只改顯示，不影響試算。</span>
+          </div>
           <div id="plans" class="result-cards"></div>
         </section>
         <p class="hint">已先消費金額不會套用本次使用的券。商戶優惠是否適用及實際核銷，仍以商戶與支付平台當時規則為準。</p>
@@ -196,6 +208,6 @@
   </nav>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-  <script src="./script.js?v=4.6"></script>
+  <script src="./script.js?v=4.6.1"></script>
 </body>
 </html>

@@ -637,11 +637,14 @@
 
       function renderDrawStates() {
         const totals = { govAwarded: 0, govUnused: 0, govUsed: 0, merchantDrawn: 0, giftDrawn: 0, merchant: 0, gift: 0, registered: 0, wallets: 0 };
-        const rows = [];
+        const drawnRows = [];
+        const undrawnRows = [];
         const compareRows = [];
+        let undrawnWallets = 0;
 
         for (const member of MEMBERS) {
           const memberTotals = { govAwarded: 0, govUnused: 0, govUsed: 0, merchantDrawn: 0, giftDrawn: 0, merchant: 0, gift: 0, registered: 0, wallets: 0 };
+          let memberUndrawn = 0;
           for (const payment of activeWallets(member)) {
             totals.wallets++;
             memberTotals.wallets++;
@@ -682,26 +685,41 @@
             const registrationLabel = !registered
               ? '未登記／未抽'
               : records.length >= 3 ? `已登記 ${records.length} 格` : `部分結果 ${records.length}/3 格`;
-            rows.push(`<tr class="wallet-row">
-              <td class="member-cell" data-label="家庭成員">${escapeHtml(member)}</td>
-              <td data-label="支付方式">${escapeHtml(payment)}</td>
-              <td class="result-cell" data-label="三次抽獎結果">${results}</td>
-              <td class="num" data-label="未核銷電子優惠">MOP ${formatMop(unusedAmount)}</td>
-              <td class="num" data-label="未核銷商戶券">${merchantCount} 張</td>
-              <td class="num" data-label="未核銷禮遇券">${giftCount} 張</td>
-              <td class="num" data-label="電子券所需基數">MOP ${formatMop(unusedAmount * 3)}</td>
-              <td class="num" data-label="已核銷電子優惠">MOP ${formatMop(usedAmount)}</td>
-              <td data-label="登記狀態"><span class="tag status-tag ${registered ? '' : 'muted-tag'}">${registrationLabel}</span></td>
-            </tr>`);
+            if (registered) {
+              drawnRows.push(`<tr class="wallet-row">
+                <th scope="row" class="member-cell">${escapeHtml(member)}</th>
+                <td>${escapeHtml(payment)}</td>
+                <td class="num">MOP ${formatMop(awardedAmount)}</td>
+                <td class="num">MOP ${formatMop(unusedAmount)}</td>
+                <td class="num">MOP ${formatMop(usedAmount)}</td>
+                <td class="num">${merchantDrawn} 張</td>
+                <td class="num">${giftDrawn} 張</td>
+                <td class="result-cell">${results}</td>
+                <td><span class="tag status-tag">${registrationLabel}</span></td>
+              </tr>`);
+            } else {
+              undrawnWallets++;
+              memberUndrawn++;
+              undrawnRows.push(`<tr class="wallet-row">
+                <th scope="row" class="member-cell">${escapeHtml(member)}</th>
+                <td>${escapeHtml(payment)}</td>
+                <td><span class="tag muted-tag">尚未抽／未登記（0/3 格）</span></td>
+              </tr>`);
+            }
           }
-          if (memberTotals.wallets) rows.push(`<tr class="member-subtotal">
-            <td class="subtotal-heading" colspan="3" data-label="家庭成員小計">${escapeHtml(member)} · 小計</td>
-            <td class="num" data-label="未核銷電子優惠">MOP ${formatMop(memberTotals.govUnused)}</td>
-            <td class="num" data-label="未核銷商戶券">${memberTotals.merchant} 張</td>
-            <td class="num" data-label="未核銷禮遇券">${memberTotals.gift} 張</td>
-            <td class="num" data-label="電子券所需基數">MOP ${formatMop(memberTotals.govUnused * 3)}</td>
-            <td class="num" data-label="已核銷電子優惠">MOP ${formatMop(memberTotals.govUsed)}</td>
-            <td data-label="已登記支付方式">${memberTotals.registered} / ${memberTotals.wallets} 已登記</td>
+          if (memberTotals.registered) drawnRows.push(`<tr class="member-subtotal">
+            <th scope="row" colspan="2">${escapeHtml(member)} · 已抽小計</th>
+            <td class="num">MOP ${formatMop(memberTotals.govAwarded)}</td>
+            <td class="num">MOP ${formatMop(memberTotals.govUnused)}</td>
+            <td class="num">MOP ${formatMop(memberTotals.govUsed)}</td>
+            <td class="num">${memberTotals.merchantDrawn} 張</td>
+            <td class="num">${memberTotals.giftDrawn} 張</td>
+            <td>—</td>
+            <td>${memberTotals.registered} / ${memberTotals.wallets} 個方式</td>
+          </tr>`);
+          if (memberUndrawn) undrawnRows.push(`<tr class="member-subtotal">
+            <th scope="row" colspan="2">${escapeHtml(member)} · 未抽小計</th>
+            <td>${memberUndrawn} 個支付方式</td>
           </tr>`);
           compareRows.push({ member, ...memberTotals });
         }
@@ -727,10 +745,15 @@
           stat('未核銷禮遇券', `${totals.gift} 張`),
           stat('已登記錢包', `${totals.registered} / ${totals.wallets}`)
         ].join('');
-        $('drawStates').innerHTML = `<table class="weekly-table">
-          <thead><tr><th>家庭成員</th><th>支付方式</th><th>三次抽獎結果</th><th>未核銷電子優惠</th><th>未核銷商戶券</th><th>未核銷禮遇券</th><th>電子券所需基數</th><th>已核銷電子優惠</th><th>登記狀態</th></tr></thead>
-          <tbody>${rows.join('')}</tbody>
-          <tfoot><tr class="family-total"><th class="total-heading" colspan="3" data-label="家庭總計">全家合計</th><td class="num" data-label="未核銷電子優惠">MOP ${formatMop(totals.govUnused)}</td><td class="num" data-label="未核銷商戶券">${totals.merchant} 張</td><td class="num" data-label="未核銷禮遇券">${totals.gift} 張</td><td class="num" data-label="電子券所需基數">MOP ${formatMop(totals.govUnused * 3)}</td><td class="num" data-label="已核銷電子優惠">MOP ${formatMop(totals.govUsed)}</td><td data-label="已登記支付方式">${totals.registered} / ${totals.wallets}</td></tr></tfoot>
+        $('drawnStates').innerHTML = `<table class="weekly-detail-table">
+          <thead><tr><th scope="col">家庭成員</th><th scope="col">支付方式</th><th scope="col">電子券抽中總額</th><th scope="col">未核銷電子優惠</th><th scope="col">已核銷電子優惠</th><th scope="col">商戶券抽中</th><th scope="col">禮遇券抽中</th><th scope="col">三次抽獎結果</th><th scope="col">登記狀態</th></tr></thead>
+          <tbody>${drawnRows.length ? drawnRows.join('') : '<tr class="empty-row"><td colspan="9">本週尚未有已抽／登記結果。</td></tr>'}</tbody>
+          <tfoot><tr><th scope="row" colspan="2">已抽合計</th><td class="num">MOP ${formatMop(totals.govAwarded)}</td><td class="num">MOP ${formatMop(totals.govUnused)}</td><td class="num">MOP ${formatMop(totals.govUsed)}</td><td class="num">${totals.merchantDrawn} 張</td><td class="num">${totals.giftDrawn} 張</td><td>—</td><td>${totals.registered} / ${totals.wallets} 個方式</td></tr></tfoot>
+        </table>`;
+        $('undrawnStates').innerHTML = `<table class="weekly-detail-table undrawn-table">
+          <thead><tr><th scope="col">家庭成員</th><th scope="col">支付方式</th><th scope="col">本週狀態</th></tr></thead>
+          <tbody>${undrawnRows.length ? undrawnRows.join('') : `<tr class="empty-row"><td colspan="3">${totals.wallets ? '所有已啟用的支付方式都已有抽獎紀錄。' : '目前沒有啟用的家庭支付方式。'}</td></tr>`}</tbody>
+          <tfoot><tr><th scope="row" colspan="2">尚未抽合計</th><td>${undrawnWallets} 個支付方式</td></tr></tfoot>
         </table>`;
       }
 
@@ -978,6 +1001,13 @@
         );
       }
 
+      function resetResultMemberVisibility() {
+        $('plans').classList.remove('show-all-members');
+        $('resultMemberControls').classList.add('hidden');
+        $('toggleResultMembers').textContent = '顯示全部家人';
+        $('toggleResultMembers').setAttribute('aria-pressed', 'false');
+      }
+
       function fallbackWalletFor(members) {
         for (const member of members) {
           const payment = activeWallets(member)[0];
@@ -989,6 +1019,7 @@
       function renderCalc() {
         const hadResults = hasCalculatedResult;
         lastCalculatedPlan = null;
+        resetResultMemberVisibility();
         const selectedMerchant = availableMerchantCoupons();
         const merchantAvailable = $('merchantAvailable').checked;
         const memberScope = selectedCalcMembers.length === MEMBERS.length ? '全家' : selectedCalcMembers.length ? selectedCalcMembers.join('、') : '未選家人';
@@ -1004,6 +1035,7 @@
 
       function calculatePlan() {
         lastCalculatedPlan = null;
+        resetResultMemberVisibility();
         $('plans').innerHTML = '';
         const rawTotal = $('totalSpend').value;
         const rawFirstSpend = $('firstSpend').value;
@@ -1047,6 +1079,7 @@
         hasCalculatedResult = true;
         $('plans').classList.toggle('single-plan', plan.plans.length === 1);
         $('plans').innerHTML = plan.plans.map((option, index) => planCard(option, index, plan)).join('');
+        $('resultMemberControls').classList.toggle('hidden', !$('plans').querySelector('.zero-amount-member'));
         return true;
       }
 
@@ -1130,6 +1163,8 @@
 
       function planBreakdown(option, plan) {
         const byMember = new Map();
+        const isZeroPayment = row => Math.round((Number(row.outOfPocket) + Number.EPSILON) * 100) === 0;
+        const visibilityClass = row => isZeroPayment(row) ? 'zero-amount-member' : '';
         const ensure = member => {
           if (!byMember.has(member)) byMember.set(member, { member, voucherDiscount: 0, minimumSpend: 0, allocatedSpend: 0, outOfPocket: 0 });
           return byMember.get(member);
@@ -1156,9 +1191,9 @@
           <td data-label="分配消費">MOP ${formatMop(row.allocatedSpend)}</td>
           <td data-label="預估自付">MOP ${formatMop(row.outOfPocket)}</td>`;
         const personRows = rows.length
-          ? rows.map(row => `<tr><th scope="row">${escapeHtml(row.member)}</th>${cells(row)}</tr>`).join('')
+          ? rows.map(row => `<tr class="${visibilityClass(row)}"><th scope="row">${escapeHtml(row.member)}</th>${cells(row)}</tr>`).join('')
           : '<tr><th scope="row">尚未選取家人</th><td colspan="4">請選擇家人或支付方式以查看明細。</td></tr>';
-        const mobileRows = rows.map(row => `<article class="breakdown-person-card">
+        const mobileRows = rows.map(row => `<article class="breakdown-person-card ${visibilityClass(row)}">
           <h4>${escapeHtml(row.member)}</h4>
           <div class="breakdown-metrics">
             <div><span>使用券折抵</span><strong>MOP ${formatMop(row.voucherDiscount)}</strong></div>
@@ -1498,6 +1533,12 @@
         if (!calculatePlan()) return;
         const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         $('calcResults').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      });
+      $('toggleResultMembers').addEventListener('click', event => {
+        const showAll = !$('plans').classList.contains('show-all-members');
+        $('plans').classList.toggle('show-all-members', showAll);
+        event.currentTarget.setAttribute('aria-pressed', String(showAll));
+        event.currentTarget.textContent = showAll ? '隱藏零金額家人' : '顯示全部家人';
       });
       $('totalSpend').addEventListener('input', renderCalc);
       $('firstSpend').addEventListener('input', renderCalc);
