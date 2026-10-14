@@ -85,6 +85,29 @@
     };
   }
 
+  function estimateUnusedGovernmentSpend(couponEntries) {
+    const byMember = Object.create(null);
+    const entries = Array.isArray(couponEntries) ? couponEntries : Object.values(couponEntries || {});
+    for (const coupon of entries) {
+      if (!coupon || coupon.used !== false || coupon.type !== 'gov') continue;
+      const member = String(coupon.member || '').trim();
+      const amountCents = toCents(coupon.amount);
+      if (!member || !Number.isInteger(amountCents) || amountCents < 0) continue;
+      byMember[member] = (byMember[member] || 0) + amountCents * 2;
+    }
+    return {
+      byMember,
+      totalCents: Object.values(byMember).reduce((sum, amountCents) => sum + amountCents, 0)
+    };
+  }
+
+  function filterWalletRedemptions(walletRedemptions, member = 'all', payment = 'all') {
+    const rows = Array.isArray(walletRedemptions) ? walletRedemptions : [];
+    return rows.filter(wallet => wallet &&
+      (member === 'all' || wallet.member === member) &&
+      (payment === 'all' || wallet.payment === payment));
+  }
+
   function validateRedemptionThresholds(actualPaidCents, governmentAmountCents, merchantCount = 0) {
     const paid = Number(actualPaidCents);
     const government = Number(governmentAmountCents);
@@ -556,7 +579,7 @@
     };
   }
 
-  const api = { planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, validateRedemptionThresholds };
+  const api = { planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, estimateUnusedGovernmentSpend, filterWalletRedemptions, validateRedemptionThresholds };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.ConsumeCalc = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -867,14 +890,11 @@
 
       function renderDrawStates() {
         const totals = { govAwarded: 0, govUnused: 0, govUsed: 0, merchantDrawn: 0, giftDrawn: 0, merchant: 0, gift: 0, registered: 0, wallets: 0 };
-        const selectedWeek = WEEKS.find(week => week.key === currentWeek);
-        const actualSpend = selectedWeek
-          ? ConsumeCalc.summarizeActualSpend(Object.values(coupons), localDateKey(selectedWeek.start), localDateKey(selectedWeek.end))
-          : { byMember: Object.create(null), totalCents: 0, hasUnrecorded: false };
-        const actualSpendAmountText = `MOP ${formatMop(actualSpend.totalCents / CENTS)}`;
-        const actualSpendValue = actualSpend.hasUnrecorded
-          ? (actualSpend.totalCents > 0 ? `${actualSpendAmountText} + 未記錄` : '未記錄')
-          : actualSpendAmountText;
+        const weekExpired = isWeekExpired(currentWeek);
+        const estimatedSpend = weekExpired
+          ? { byMember: Object.create(null), totalCents: 0 }
+          : ConsumeCalc.estimateUnusedGovernmentSpend(Object.values(coupons));
+        const estimatedSpendValue = weekExpired ? '已過期' : `MOP ${formatMop(estimatedSpend.totalCents / CENTS)}`;
         const drawnRows = [];
         const undrawnRows = [];
         const compareRows = [];
@@ -965,36 +985,36 @@
           compareRows.push({ member, ...memberTotals });
         }
 
-        const maxAwarded = Math.max(0, ...compareRows.map(row => row.govAwarded));
         $('memberCompare').innerHTML = `<table class="member-compare-table">
-          <thead><tr><th scope="col">家庭成員</th><th scope="col">本週實際自付</th><th scope="col">電子券抽中總額</th><th scope="col">未核銷電子券</th><th scope="col">已核銷電子券</th><th scope="col">商戶券抽中</th><th scope="col">禮遇券抽中</th><th scope="col">已登記錢包</th></tr></thead>
+          <thead><tr><th scope="col">家庭成員</th><th scope="col">估算自付</th><th scope="col">電子券抽中總額</th><th scope="col">未核銷電子券</th><th scope="col">已核銷電子券</th><th scope="col">商戶券抽中</th><th scope="col">禮遇券抽中</th><th scope="col">已登記錢包</th></tr></thead>
           <tbody>${compareRows.map(row => {
-            const meter = maxAwarded ? Math.round(row.govAwarded / maxAwarded * 100) : 0;
-            const memberSpend = actualSpend.byMember[row.member];
-            const memberSpendAmount = `MOP ${formatMop((memberSpend?.totalCents || 0) / CENTS)}`;
-            const memberSpendValue = memberSpend?.hasUnrecorded
-              ? (memberSpend.totalCents > 0 ? `${memberSpendAmount} + 未記錄` : '未記錄')
-              : memberSpendAmount;
+            const memberEstimateValue = weekExpired
+              ? '已過期'
+              : `MOP ${formatMop((estimatedSpend.byMember[row.member] || 0) / CENTS)}`;
             return `<tr>
               <th scope="row">${escapeHtml(row.member)}</th>
-              <td class="num actual-spend-cell"><strong>${memberSpendValue}</strong></td>
-              <td class="num amount-cell"><strong>MOP ${formatMop(row.govAwarded)}</strong><span class="member-meter" aria-hidden="true"><span style="width:${meter}%"></span></span></td>
+              <td class="num estimated-spend-cell"><strong>${memberEstimateValue}</strong></td>
+              <td class="num amount-cell"><strong>MOP ${formatMop(row.govAwarded)}</strong></td>
               <td class="num">MOP ${formatMop(row.govUnused)}</td><td class="num">MOP ${formatMop(row.govUsed)}</td>
               <td class="num">${row.merchantDrawn} 張</td><td class="num">${row.giftDrawn} 張</td><td class="num">${row.registered} / ${row.wallets}</td>
             </tr>`;
           }).join('')}</tbody>
-          <tfoot><tr><th scope="row">全家合計</th><td class="num actual-spend-cell">${actualSpendValue}</td><td class="num">MOP ${formatMop(totals.govAwarded)}</td><td class="num">MOP ${formatMop(totals.govUnused)}</td><td class="num">MOP ${formatMop(totals.govUsed)}</td><td class="num">${totals.merchantDrawn} 張</td><td class="num">${totals.giftDrawn} 張</td><td class="num">${totals.registered} / ${totals.wallets}</td></tr></tfoot>
+          <tfoot><tr><th scope="row">全家合計</th><td class="num estimated-spend-cell">${estimatedSpendValue}</td><td class="num">MOP ${formatMop(totals.govAwarded)}</td><td class="num">MOP ${formatMop(totals.govUnused)}</td><td class="num">MOP ${formatMop(totals.govUsed)}</td><td class="num">${totals.merchantDrawn} 張</td><td class="num">${totals.giftDrawn} 張</td><td class="num">${totals.registered} / ${totals.wallets}</td></tr></tfoot>
         </table>`;
 
         $('drawStats').innerHTML = [
-          stat('本週實際自付', actualSpendValue),
           stat('未核銷電子優惠', `MOP ${formatMop(totals.govUnused)}`),
           stat('未核銷商戶券', `${totals.merchant} 張`),
           stat('未核銷禮遇券', `${totals.gift} 張`),
           stat('已登記錢包', `${totals.registered} / ${totals.wallets}`)
         ].join('');
-        $('walletRedemptionCards').innerHTML = walletRedemptions.length
-          ? walletRedemptions.map(wallet => `<article class="wallet-redemption-card">
+        const filteredWalletRedemptions = ConsumeCalc.filterWalletRedemptions(
+          walletRedemptions,
+          $('walletRedemptionMemberFilter').value || 'all',
+          $('walletRedemptionPaymentFilter').value || 'all'
+        );
+        $('walletRedemptionCards').innerHTML = filteredWalletRedemptions.length
+          ? filteredWalletRedemptions.map(wallet => `<article class="wallet-redemption-card">
               <div class="wallet-redemption-heading"><h4>${escapeHtml(wallet.member)} · ${escapeHtml(wallet.payment)}</h4><span class="wallet-redemption-count">${wallet.coupons.length} 張可用</span></div>
               <div class="wallet-redemption-coupons">${wallet.coupons.map(coupon => {
                 const label = coupon.type === 'gov' ? `電子券 MOP ${formatMop(coupon.amount)}`
@@ -1004,7 +1024,9 @@
               }).join('')}</div>
               <button class="button" type="button" data-wallet-redemption data-member="${escapeHtml(wallet.member)}" data-payment="${escapeHtml(wallet.payment)}" aria-label="${escapeHtml(wallet.member)} ${escapeHtml(wallet.payment)} 直接核銷">直接核銷</button>
             </article>`).join('')
-          : `<p class="wallet-redemption-empty">${isWeekExpired(currentWeek) ? '所選週已過期，只能查看券紀錄。' : '本週沒有未核銷券；未登記／未開獎的錢包會在下方狀態明細顯示。'}</p>`;
+          : `<p class="wallet-redemption-empty">${walletRedemptions.length
+            ? '目前篩選沒有符合的未核銷券，請選「全部」或改選其他家人／支付方式。'
+            : weekExpired ? '所選週已過期，只能查看券紀錄。' : '本週沒有未核銷券；未登記／未開獎的錢包會在下方狀態明細顯示。'}</p>`;
         $('drawnStates').innerHTML = `<table class="weekly-detail-table">
           <thead><tr><th scope="col">家庭成員</th><th scope="col">支付方式</th><th scope="col">電子券抽中總額</th><th scope="col">未核銷電子優惠</th><th scope="col">已核銷電子優惠</th><th scope="col">商戶券抽中</th><th scope="col">禮遇券抽中</th><th scope="col">三次抽獎結果</th><th scope="col">登記狀態</th></tr></thead>
           <tbody>${drawnRows.length ? drawnRows.join('') : '<tr class="empty-row"><td colspan="9">本週尚未有已抽／登記結果。</td></tr>'}</tbody>
@@ -1179,6 +1201,22 @@
 
       function renderCouponVault() {
         const entries = Object.entries(coupons);
+        const selectedWeek = WEEKS.find(week => week.key === currentWeek);
+        const actualSpend = selectedWeek
+          ? ConsumeCalc.summarizeActualSpend(Object.values(coupons), localDateKey(selectedWeek.start), localDateKey(selectedWeek.end))
+          : { byMember: Object.create(null), totalCents: 0, hasUnrecorded: false };
+        const spendLabel = (totalCents, hasUnrecorded) => {
+          const amountText = `MOP ${formatMop(totalCents / CENTS)}`;
+          return hasUnrecorded ? (totalCents > 0 ? `${amountText} + 未記錄` : '未記錄') : amountText;
+        };
+        $('actualSpendSummary').innerHTML = `<table class="actual-spend-table">
+          <thead><tr><th scope="col">家庭成員</th><th scope="col">實際自付</th></tr></thead>
+          <tbody>${MEMBERS.map(member => {
+            const spend = actualSpend.byMember[member];
+            return `<tr><th scope="row">${escapeHtml(member)}</th><td class="num">${spendLabel(spend?.totalCents || 0, Boolean(spend?.hasUnrecorded))}</td></tr>`;
+          }).join('')}</tbody>
+          <tfoot><tr><th scope="row">全家合計</th><td class="num">${spendLabel(actualSpend.totalCents, actualSpend.hasUnrecorded)}</td></tr></tfoot>
+        </table>`;
         const activeEntries = isWeekExpired(currentWeek) ? [] : entries;
         const unusedGovernment = activeEntries.filter(([, coupon]) => coupon.type === 'gov' && !coupon.used);
         const unusedAmount = unusedGovernment.reduce((sum, [, coupon]) => sum + coupon.amount, 0);
@@ -2092,6 +2130,10 @@
         $('week').value = currentWeek;
         fillMemberSelects();
         setWalletOptions('recordWallet', MEMBERS[0]);
+        fillSelect('walletRedemptionMemberFilter', [{ value: 'all', label: '全部家人' }]
+          .concat(MEMBERS.map(member => ({ value: member, label: member }))), 'all');
+        fillSelect('walletRedemptionPaymentFilter', [{ value: 'all', label: '全部支付方式' }]
+          .concat(WALLETS.map(wallet => ({ value: wallet, label: wallet }))), 'all');
         fillSelect('filterWallet', [{ value: 'all', label: '全部支付方式' }]
           .concat(WALLETS.map(wallet => ({ value: wallet, label: wallet }))), 'all');
         coupons = sanitizeCoupons(localData[currentWeek]?.coupons);
@@ -2225,6 +2267,8 @@
         if (!button) return;
         openWalletRedemption(button.dataset.member, button.dataset.payment);
       });
+      $('walletRedemptionMemberFilter').addEventListener('change', renderDrawStates);
+      $('walletRedemptionPaymentFilter').addEventListener('change', renderDrawStates);
       $('couponList').addEventListener('click', event => {
         const walletPlan = event.target.closest('[data-wallet-plan]');
         if (walletPlan) {

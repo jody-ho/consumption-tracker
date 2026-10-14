@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#19594c">
-  <meta name="application-version" content="4.8.0">
+  <meta name="application-version" content="4.9.0">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.8.0">
+  <link rel="stylesheet" href="./style.css?v=4.9.0">
 </head>
 <body>
   <header class="hero">
@@ -52,23 +52,38 @@
     <section class="week-quick-summary" aria-labelledby="quickSummaryHeading">
       <h2 id="quickSummaryHeading">所選週摘要</h2>
       <div id="drawStats" class="stats quick-stats" aria-live="polite"></div>
-      <p class="summary-note">只統計本週券核銷時記錄的實付；同一交易多張券只計一次。舊核銷缺金額會標示「未記錄」、不作推算，其他未登記消費不計。</p>
+      <p class="summary-note">首頁表格估算尚未使用的電子券自付；已記錄的實際自付只在最後一頁「家庭券庫」查看。</p>
     </section>
 
     <section id="overview" class="panel active" aria-label="本週概覽">
       <div class="panel-layout">
         <article class="card">
+          <h2>本週家庭匯總</h2>
+          <p class="lead">先看每位家人尚未使用電子券的估算自付，以及全家合計。</p>
+          <h3 class="section-heading">家庭成員本週券額及估算自付</h3>
+          <div id="memberCompare" class="member-compare-scroll" role="region" aria-label="本週家庭成員券額及估算自付比較表" tabindex="0"></div>
+          <p class="table-hint">估算＝尚未核銷政府電子券面額 × 2，不含商戶滿減券；所選週已過期時不顯示估算。手機可橫向滑動，姓名欄固定。</p>
+        </article>
+
+        <article class="card">
           <h2>本週抽獎登記狀態</h2>
-          <p class="lead">上方摘要顯示本週實際自付、未核銷券與登記進度；這裡比較家人抽中情況，再展開支付方式明細。</p>
+          <p class="lead">需要直接核銷時，可篩選家人和支付方式，縮小可用券清單。</p>
           <section class="wallet-redemptions" aria-labelledby="walletRedemptionHeading">
             <h3 id="walletRedemptionHeading" class="section-heading">家人可用券 · 直接核銷</h3>
-            <p class="hint">不用先試算。選擇家人與支付方式，勾選本次要用的券，再核對實付金額與摘要；按最後確認前不會更改券狀態。</p>
+            <p class="hint">選擇家人和支付方式，再勾選本次要用的券；核對實付金額及門檻後才記錄，確認前不會更改券狀態。</p>
+            <div class="wallet-redemption-filters" role="group" aria-label="篩選可直接核銷的家人和支付方式">
+              <div class="field">
+                <label for="walletRedemptionMemberFilter">家人</label>
+                <select id="walletRedemptionMemberFilter" class="control" aria-label="按家人篩選可用券"></select>
+              </div>
+              <div class="field">
+                <label for="walletRedemptionPaymentFilter">支付方式</label>
+                <select id="walletRedemptionPaymentFilter" class="control" aria-label="按支付方式篩選可用券"></select>
+              </div>
+            </div>
             <div id="walletRedemptionCards" class="wallet-redemption-grid"></div>
           </section>
-          <h3 class="section-heading">家庭成員本週抽中及實際自付比較</h3>
-          <div id="memberCompare" class="member-compare-scroll" role="region" aria-label="本週家庭成員抽中及實際自付比較表" tabindex="0"></div>
-          <p class="table-hint">實付按交易去重（同筆多券只計一次）；無支出為 MOP 0，舊紀錄缺金額標「未記錄」。手機可橫向滑動，姓名欄固定。</p>
-            <details class="weekly-details">
+          <details class="weekly-details">
             <summary>查看「已抽」與「未抽」支付方式 <span>分開檢視券額及尚未抽的方式</span></summary>
             <section class="weekly-result-group" aria-labelledby="drawnHeading">
               <h4 class="weekly-result-title" id="drawnHeading">已抽（含部分登記）</h4>
@@ -183,6 +198,11 @@
       <article class="card">
         <h2>本週家庭券庫</h2>
         <p class="lead">本週券已按家人與支付方式分組；可篩選狀態。</p>
+        <section class="actual-spend-summary" aria-labelledby="actualSpendHeading">
+          <h3 id="actualSpendHeading">本週實際自付（已記錄）</h3>
+          <p class="hint">只計核銷時記錄的實付；同一交易多張券只計一次。舊紀錄缺金額會顯示「未記錄」，不作推算。</p>
+          <div id="actualSpendSummary" class="actual-spend-scroll" role="region" aria-label="按家庭成員及全家合計的本週實際自付" tabindex="0"></div>
+        </section>
         <div id="stats" class="stats" aria-live="polite"></div>
         <details class="weekly-details fun-details">
           <summary>查看家庭趣味統計</summary>
@@ -278,9 +298,9 @@
         <button id="cancelWalletRedeem" class="button secondary" type="button">取消</button>
         <button id="continueWalletRedeem" class="button" type="submit">下一步：核對實付</button>
       </div>
-    </form>
+  </form>
   </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=4.8.0"></script>
+  <script src="./script.js?v=4.9.0"></script>
 </body>
 </html>

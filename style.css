@@ -175,7 +175,7 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .week-quick-summary { margin: 7px 0 14px; padding: 9px 0 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .week-quick-summary h2 { margin: 0 0 5px; color: var(--muted); font-size: 15px; font-weight: 800; }
 .week-quick-summary .summary-note { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
-.quick-stats.stats { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 10px; margin: 0; }
+.quick-stats.stats { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin: 0; }
 .quick-stats .stat { padding: 3px 12px; border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; }
 .quick-stats .stat:first-child { padding-left: 0; border-left: 0; }
 .quick-stats .stat strong { font-size: clamp(18px,1.8vw,22px); }
@@ -197,7 +197,7 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .weekly-table tfoot th:first-child { border-radius: 0 0 0 13px; }
 .weekly-table tfoot td:last-child { border-radius: 0 0 13px 0; }
 .member-compare-scroll { overflow-x: auto; border: 1px solid #dce3da; border-radius: 15px; background: var(--card); -webkit-overflow-scrolling: touch; }
-.member-compare-table { width: 100%; min-width: 940px; border-collapse: separate; border-spacing: 0; background: var(--card); font-size: 14px; }
+.member-compare-table { width: 100%; min-width: 900px; border-collapse: separate; border-spacing: 0; background: var(--card); font-size: 14px; }
 .member-compare-table th, .member-compare-table td { padding: 12px 11px; border-bottom: 1px solid #e7ebe4; text-align: right; vertical-align: middle; white-space: nowrap; }
 .member-compare-table thead th { position: sticky; top: 0; z-index: 2; background: var(--pine-900); color: #fff; font-size: 13px; font-weight: 800; }
 .member-compare-table thead th:first-child { left: 0; z-index: 3; border-radius: 13px 0 0 0; text-align: left; }
@@ -209,13 +209,12 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .member-compare-table tbody tr:nth-child(even) th { background: #fbfcf8; }
 .member-compare-table tbody tr:hover, .member-compare-table tbody tr:hover th { background: #f1f6f0; }
 .member-compare-table .num { font-variant-numeric: tabular-nums; }
-.member-compare-table .amount-cell { min-width: 150px; }
+.member-compare-table .amount-cell { min-width: 120px; }
 .member-compare-table .amount-cell strong { display: block; color: var(--pine-950); font-variant-numeric: tabular-nums; }
-.member-compare-table .actual-spend-cell { min-width: 165px; color: var(--pine-950); }
-.member-compare-table .actual-spend-cell strong { font-weight: 850; }
-.member-meter { display: block; height: 5px; margin-top: 6px; overflow: hidden; border-radius: 99px; background: #e8eee6; }
-.member-meter > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #71977b, var(--pine-700)); }
+.member-compare-table .estimated-spend-cell { min-width: 140px; color: var(--pine-950); }
+.member-compare-table .estimated-spend-cell strong { font-weight: 850; }
 .member-compare-table tfoot th, .member-compare-table tfoot td { border-bottom: 0; background: var(--pine-950); color: #fffdf6; font-weight: 850; }
+.member-compare-table tfoot td.estimated-spend-cell { color: #fffdf6; }
 .member-compare-table tfoot th { position: sticky; left: 0; z-index: 1; border-radius: 0 0 0 13px; }
 .member-compare-table tfoot td:last-child { border-radius: 0 0 13px 0; }
 .result-pills { display: flex; min-width: 145px; flex-wrap: wrap; gap: 5px; }
@@ -229,6 +228,17 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .tag.muted-tag { background: #ebeeea; color: #68756d; }
 .tag.expired-tag, .result-pill.expired { background: var(--danger-soft); color: #873a32; }
 .table-hint { margin: 9px 2px 0; color: var(--muted); font-size: 14px; }
+.actual-spend-summary { margin: 12px 0 18px; padding: 14px; border: 1px solid #dce3da; border-radius: 13px; background: #f8fbf7; }
+.actual-spend-summary h3 { margin: 0 0 4px; color: var(--pine-950); font-size: 18px; }
+.actual-spend-summary .hint { margin: 0 0 9px; }
+.actual-spend-scroll { overflow-x: auto; border: 1px solid #dce3da; border-radius: 10px; background: var(--card); -webkit-overflow-scrolling: touch; }
+.actual-spend-table { width: 100%; min-width: 340px; border-collapse: separate; border-spacing: 0; font-size: 15px; }
+.actual-spend-table th, .actual-spend-table td { padding: 10px 12px; border-bottom: 1px solid #e7ebe4; }
+.actual-spend-table th { text-align: left; }
+.actual-spend-table td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.actual-spend-table thead th { background: var(--pine-900); color: #fff; font-weight: 800; }
+.actual-spend-table tbody th { color: var(--pine-950); font-weight: 800; }
+.actual-spend-table tfoot th, .actual-spend-table tfoot td { border-bottom: 0; background: var(--pine-950); color: #fffdf6; font-weight: 850; }
 .weekly-details { margin-top: 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
 .weekly-details > summary { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 3px; color: var(--pine-900); font-size: 16px; font-weight: 850; cursor: pointer; list-style: none; }
 .weekly-details > summary::-webkit-details-marker { display: none; }
@@ -572,6 +582,9 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .record-targets { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .wallet-redemptions { margin: 20px 0 22px; padding-top: 15px; border-top: 1px solid var(--line); }
 .wallet-redemptions > .hint { margin: 0 0 11px; }
+.wallet-redemption-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 12px 0 14px; padding: 12px; border: 1px solid #dce3da; border-radius: 12px; background: #f8fbf7; }
+.wallet-redemption-filters .field { min-width: 0; }
+.wallet-redemption-filters .control { width: 100%; min-height: 52px; }
 .wallet-redemption-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
 .wallet-redemption-card { min-width: 0; padding: 12px; border: 1px solid #d8e2dc; border-left: 4px solid var(--pine-700); border-radius: 13px; background: #f8fbf7; }
 .wallet-redemption-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
