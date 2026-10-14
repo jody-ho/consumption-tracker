@@ -108,7 +108,7 @@
       (payment === 'all' || wallet.payment === payment));
   }
 
-  function validateRedemptionThresholds(actualPaidCents, governmentAmountCents, merchantCount = 0) {
+  function validateRedemptionThresholds(actualPaidCents, governmentAmountCents, merchantCount = 0, governmentVoucherAmountsCents = null) {
     const paid = Number(actualPaidCents);
     const government = Number(governmentAmountCents);
     const merchant = Number(merchantCount);
@@ -117,12 +117,17 @@
     const safeGovernment = Number.isInteger(government) && government >= 0 ? government : 0;
     const safeMerchant = Number.isInteger(merchant) && merchant >= 0 ? merchant : 0;
     const netBeforeGovernmentCents = safePaid + safeGovernment;
-    const governmentThresholdCents = safeGovernment * 3;
-    const governmentShortfallCents = safeGovernment > 0 ? Math.max(0, governmentThresholdCents - netBeforeGovernmentCents) : 0;
+    const voucherAmounts = Array.isArray(governmentVoucherAmountsCents)
+      ? governmentVoucherAmountsCents.map(Number)
+      : safeGovernment > 0 ? [safeGovernment] : [];
+    const voucherAmountsValid = voucherAmounts.every(amount => Number.isInteger(amount) && amount > 0) &&
+      voucherAmounts.reduce((sum, amount) => sum + amount, 0) === safeGovernment;
+    const governmentThresholdCents = voucherAmounts.length ? Math.max(...voucherAmounts) * 3 : 0;
+    const governmentShortfallCents = voucherAmounts.length ? Math.max(0, governmentThresholdCents - netBeforeGovernmentCents) : 0;
     const purchaseBeforeMerchantDiscountCents = netBeforeGovernmentCents + safeMerchant * MERCHANT_DISCOUNT_CENTS;
     const merchantShortfallCents = safeMerchant > 0 ? Math.max(0, MERCHANT_MIN_CENTS - purchaseBeforeMerchantDiscountCents) : 0;
     return {
-      valid: inputsValid && safeMerchant <= 1 && governmentShortfallCents === 0 && merchantShortfallCents === 0,
+      valid: inputsValid && voucherAmountsValid && safeMerchant <= 1 && governmentShortfallCents === 0 && merchantShortfallCents === 0,
       netBeforeGovernmentCents,
       governmentThresholdCents,
       governmentShortfallCents,
@@ -189,9 +194,10 @@
         const transactions = buckets.map((bucket, index) => {
           const usesMerchant = Boolean(mask & (1 << index));
           if (usesMerchant) merchantCount++;
-          const governmentAmountCents = bucket.reduce((sum, coupon) => sum + Number(coupon.amount) * CENTS, 0);
-          // The program checks net transaction spend after merchant/payment discounts, before e-vouchers.
-          const governmentThresholdCents = governmentAmountCents * 3;
+          const governmentCouponAmountsCents = bucket.map(coupon => Number(coupon.amount) * CENTS);
+          const governmentAmountCents = governmentCouponAmountsCents.reduce((sum, amount) => sum + amount, 0);
+          // Each voucher is checked against the same post-discount, pre-voucher transaction net.
+          const governmentThresholdCents = Math.max(...governmentCouponAmountsCents) * 3;
           const netSpendBeforeGovernmentCents = governmentThresholdCents;
           const minSpendCents = usesMerchant
             ? Math.max(MERCHANT_MIN_CENTS, netSpendBeforeGovernmentCents + MERCHANT_DISCOUNT_CENTS)
@@ -432,8 +438,8 @@
         transaction.member === coupon.member && transaction.payment === coupon.payment
       );
       for (const transaction of sameWalletTransactions) {
-        const targetGovernmentAmountCents = toCents(transaction.governmentAmount) + faceCents;
-        const targetGovCents = targetGovernmentAmountCents * 3;
+        const currentVoucherFaceCents = (transaction.governmentCoupons || []).map(existing => Number(existing.amount) * CENTS);
+        const targetGovCents = Math.max(faceCents, ...currentVoucherFaceCents) * 3;
         const targetSpendCents = transaction.usesMerchant
           ? Math.max(MERCHANT_MIN_CENTS, targetGovCents + MERCHANT_DISCOUNT_CENTS)
           : targetGovCents;
@@ -579,7 +585,63 @@
     };
   }
 
-  const api = { planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, estimateUnusedGovernmentSpend, filterWalletRedemptions, validateRedemptionThresholds };
+  function calculateWalletSpendScenarios(walletCoupons, expired = false) {
+    const coupons = Array.isArray(walletCoupons) ? walletCoupons : Object.values(walletCoupons || {});
+    const governmentCoupons = coupons.filter(coupon => coupon && coupon.type === 'gov' && GOV_DENOMINATIONS.has(Number(coupon.amount)));
+    const merchantCoupons = coupons.filter(coupon => coupon && coupon.type === 'merchant' && String(coupon.payment || '').trim());
+    const governmentAwardedCents = governmentCoupons.reduce((sum, coupon) => sum + Number(coupon.amount) * CENTS, 0);
+    const governmentUsedCents = governmentCoupons.filter(coupon => coupon.used).reduce((sum, coupon) => sum + Number(coupon.amount) * CENTS, 0);
+    const governmentUnredeemedCents = governmentCoupons.filter(coupon => !coupon.used).reduce((sum, coupon) => sum + Number(coupon.amount) * CENTS, 0);
+    const merchantUnredeemedCount = merchantCoupons.filter(coupon => !coupon.used).length;
+    const governmentAvailableAmounts = expired ? [] : governmentCoupons.filter(coupon => !coupon.used)
+      .map(coupon => Number(coupon.amount)).sort((a, b) => b - a);
+    const governmentAvailableCents = expired ? 0 : governmentUnredeemedCents;
+    const merchantAvailableCount = expired ? 0 : merchantUnredeemedCount;
+    // All available vouchers use the same post-discount, pre-voucher net; the largest face value sets the minimum threshold.
+    const governmentThresholdCents = governmentAvailableAmounts.length ? governmentAvailableAmounts[0] * CENTS * 3 : 0;
+    const noMerchant = governmentAvailableCents > 0
+      ? {
+          requiredGrossSpendCents: governmentThresholdCents,
+          merchantDiscountCents: 0,
+          netBeforeGovernmentCents: governmentThresholdCents,
+          governmentDiscountCents: governmentAvailableCents,
+          governmentThresholdCents,
+          governmentOrderNetBeforeGovernmentCents: governmentThresholdCents,
+          outOfPocketCents: governmentThresholdCents - governmentAvailableCents
+        }
+      : null;
+    let withMerchant = null;
+    if (merchantAvailableCount > 0) {
+      const requiredGrossSpendCents = Math.max(MERCHANT_MIN_CENTS, governmentThresholdCents + MERCHANT_DISCOUNT_CENTS);
+      const merchantDiscountCents = MERCHANT_DISCOUNT_CENTS;
+      const netBeforeGovernmentCents = requiredGrossSpendCents - merchantDiscountCents;
+      withMerchant = {
+        requiredGrossSpendCents,
+        merchantDiscountCents,
+        netBeforeGovernmentCents,
+        governmentDiscountCents: governmentAvailableCents,
+        governmentThresholdCents,
+        governmentOrderSpendCents: requiredGrossSpendCents,
+        governmentOrderNetBeforeGovernmentCents: netBeforeGovernmentCents,
+        outOfPocketCents: netBeforeGovernmentCents - governmentAvailableCents
+      };
+    }
+    return {
+      governmentAwardedCents,
+      governmentUsedCents,
+      governmentUnredeemedCents,
+      governmentAvailableCents,
+      merchantAwardedCount: merchantCoupons.length,
+      merchantUsedCount: merchantCoupons.filter(coupon => coupon.used).length,
+      merchantUnredeemedCount,
+      merchantAvailableCount,
+      governmentAvailableAmounts,
+      withoutMerchant: noMerchant,
+      withMerchant
+    };
+  }
+
+  const api = { planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, estimateUnusedGovernmentSpend, filterWalletRedemptions, validateRedemptionThresholds, calculateWalletSpendScenarios };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.ConsumeCalc = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -651,6 +713,10 @@
       let coupons = Object.create(null);
       let pendingRedemption = null;
       let pendingWalletRedemption = null;
+      const walletPlanRedemptionContexts = new Map();
+      let walletPlanRedemptionSequence = 0;
+      let walletPlanReturnFocus = null;
+      let walletPlanTransitioning = false;
       let localData = Object.create(null);
       let walletConfig = cloneDefaultWallets();
       let selectedCalcMembers = [...MEMBERS];
@@ -803,7 +869,9 @@
         renderCalcMemberFilter();
         renderCalcPaymentFilter();
         renderVaultMemberFilter();
+        renderWalletPlanFilters();
         renderDrawStates();
+        renderWalletSpendPlans();
         renderRegistrationStatus();
         renderWalletSettings();
         renderCouponVault();
@@ -817,6 +885,13 @@
         fillMemberSelects();
         setWalletOptions('recordWallet', recordMember, recordWallet);
         if (!$('recordWallet').value && activeWallets(recordMember).length) $('recordWallet').value = activeWallets(recordMember)[0];
+      }
+
+      function renderWalletPlanFilters() {
+        const selectedMember = $('walletPlanMemberFilter').value || 'all';
+        const selectedPayment = $('walletPlanPaymentFilter').value || 'all';
+        fillSelect('walletPlanMemberFilter', [{ value: 'all', label: '全家' }, ...MEMBERS.map(member => ({ value: member, label: member }))], selectedMember);
+        fillSelect('walletPlanPaymentFilter', [{ value: 'all', label: '全部支付方式' }, ...WALLETS.map(payment => ({ value: payment, label: payment }))], selectedPayment);
       }
 
       function renderMemberChips(containerId, selectedMembers, dataAttribute) {
@@ -1049,6 +1124,70 @@
         if (coupon.type === 'merchant') return `<span class="result-pill merchant-pill ${stateClass}">商戶 100−12 · ${status}</span>`;
         if (coupon.type === 'gift') return `<span class="result-pill gift-pill ${stateClass}">消費禮遇券 · ${status}</span>`;
         return '<span class="result-pill zero-pill">無券結果（舊記錄）</span>';
+      }
+
+      function renderWalletSpendPlans() {
+        const expired = isWeekExpired(currentWeek);
+        const selectedMember = $('walletPlanMemberFilter').value || 'all';
+        const selectedPayment = $('walletPlanPaymentFilter').value || 'all';
+        const allRows = MEMBERS.flatMap(member => activeWallets(member).map(payment => {
+          const walletCoupons = Object.values(coupons).filter(coupon => coupon.member === member && coupon.payment === payment);
+          return { member, payment, ...ConsumeCalc.calculateWalletSpendScenarios(walletCoupons, expired) };
+        }));
+        const rows = allRows.filter(row =>
+          (selectedMember === 'all' || row.member === selectedMember) &&
+          (selectedPayment === 'all' || row.payment === selectedPayment)
+        );
+        const usableWalletCount = rows.filter(row => row.governmentAvailableCents > 0 || row.merchantAvailableCount > 0).length;
+        const scope = `${selectedMember === 'all' ? '全家' : selectedMember}／${selectedPayment === 'all' ? '全部支付方式' : selectedPayment}`;
+        $('walletPlanSummary').textContent = expired
+          ? `${scope}：顯示 ${rows.length}／${allRows.length} 個已啟用錢包；所選週已過期，未核銷券僅供查閱，不能再使用。`
+          : `${scope}：顯示 ${rows.length}／${allRows.length} 個已啟用錢包；${usableWalletCount} 個錢包有可用電子券或滿減券。`;
+        walletPlanRedemptionContexts.clear();
+        if (!rows.length) {
+          $('walletSpendPlanTable').innerHTML = '<p class="wallet-plan-empty">目前篩選沒有符合的已啟用支付方式；請改選「全家」或「全部支付方式」。</p>';
+          return;
+        }
+        const money = cents => `MOP ${formatMop(cents / CENTS)}`;
+        const scenarioMarkup = (row, scenario, title, includeMerchant, governmentIds, merchantId) => {
+          const selectedCouponIds = [...governmentIds];
+          if (includeMerchant && merchantId) selectedCouponIds.push(merchantId);
+          const contextId = `wallet-plan-redemption-${walletPlanRedemptionSequence++}`;
+          walletPlanRedemptionContexts.set(contextId, {
+            member: row.member,
+            payment: row.payment,
+            scenarioTitle: title,
+            couponIds: selectedCouponIds,
+            minimumGrossSpendCents: scenario.requiredGrossSpendCents,
+            prefillPayCents: scenario.outOfPocketCents
+          });
+          const ariaLabel = `直接核銷：${row.member}／${row.payment}，${title}，最低原始消費額 ${money(scenario.requiredGrossSpendCents)}`;
+          return `<section class="wallet-plan-scenario"><h4>${title}</h4><div class="wallet-plan-values"><div class="wallet-plan-minimum-value"><div><span>最低原始消費額</span><strong>${money(scenario.requiredGrossSpendCents)}</strong></div><button type="button" class="button secondary wallet-plan-redemption-button" data-wallet-plan-redemption="${contextId}" aria-haspopup="dialog" aria-label="${escapeHtml(ariaLabel)}">直接核銷</button></div><div class="wallet-plan-outlay"><span>估算自付</span><strong>${money(scenario.outOfPocketCents)}</strong></div></div></section>`;
+        };
+        $('walletSpendPlanTable').innerHTML = `<div class="wallet-plan-list">${rows.map(row => {
+          const hasGovernmentPlan = Boolean(row.withoutMerchant);
+          const hasMerchantPlan = Boolean(row.withMerchant);
+          const scenarioCount = Number(hasGovernmentPlan) + Number(hasMerchantPlan);
+          const walletEntries = Object.entries(coupons).filter(([, coupon]) => coupon.member === row.member && coupon.payment === row.payment && !coupon.used && (coupon.type === 'merchant' || (coupon.type === 'gov' && [10, 20, 50, 100, 200].includes(Number(coupon.amount)))));
+          const governmentIds = walletEntries.filter(([, coupon]) => coupon.type === 'gov')
+            .sort((a, b) => Number(b[1].amount) - Number(a[1].amount) || String(a[0]).localeCompare(String(b[0])))
+            .map(([id]) => id);
+          const merchantId = walletEntries.find(([, coupon]) => coupon.type === 'merchant')?.[0] || '';
+          const walletNote = row.merchantAvailableCount > 1
+            ? `<p class="wallet-plan-merchant-note">可用滿減券 ${row.merchantAvailableCount} 張；以下只計一筆交易使用一張，其餘券須另開交易。</p>`
+            : '';
+          const emptyMessage = scenarioCount
+            ? ''
+            : expired && (row.governmentUnredeemedCents > 0 || row.merchantUnredeemedCount > 0)
+              ? '<p class="wallet-plan-empty-row">所選週已過期，券只供查閱，不能再使用。</p>'
+              : '<p class="wallet-plan-empty-row">本錢包目前沒有可用政府電子券或商戶滿減券。</p>';
+          return `<article class="wallet-plan-row ${scenarioCount > 1 ? 'wallet-plan-two-cases' : 'wallet-plan-one-case'}">
+            <div class="wallet-plan-wallet"><strong>${escapeHtml(row.member)}</strong><span>${escapeHtml(row.payment)}</span><p>可用政府券 E <b>${money(row.governmentAvailableCents)}</b></p>${walletNote}</div>
+            ${hasGovernmentPlan ? scenarioMarkup(row, row.withoutMerchant, '不使用滿減券', false, governmentIds, '') : ''}
+            ${hasMerchantPlan ? scenarioMarkup(row, row.withMerchant, '使用一張滿減券', true, governmentIds, merchantId) : ''}
+            ${emptyMessage}
+          </article>`;
+        }).join('')}</div>`;
       }
 
       function stat(label, value) {
@@ -1596,7 +1735,17 @@
         openRedemptionDialog([id], [transaction]);
       }
 
-      function openWalletRedemption(member, payment) {
+      function restoreWalletPlanFocus() {
+        const target = walletPlanReturnFocus;
+        walletPlanReturnFocus = null;
+        if (target?.isConnected) {
+          target.focus({ preventScroll: true });
+          return;
+        }
+        document.querySelector('.wallet-plan-details > summary')?.focus({ preventScroll: true });
+      }
+
+      function openWalletRedemption(member, payment, options = {}) {
         if (isWeekExpired(currentWeek)) {
           showToast('所選週已過期，只能查看券紀錄。');
           return;
@@ -1610,20 +1759,41 @@
           render();
           return;
         }
-        pendingWalletRedemption = { member, payment, candidates };
-        $('walletRedeemTitle').textContent = `直接核銷 · ${member} · ${payment}`;
-        $('walletRedeemIntro').textContent = '勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。下一步會要求輸入實付並顯示核對摘要。';
+        const preselectedIds = new Set(options.preselectedIds || []);
+        const candidateIds = new Set(candidates.map(coupon => coupon.id));
+        if ([...preselectedIds].some(id => !candidateIds.has(id))) {
+          showToast('方案中的券狀態已更新，請重新開啟用券金額規劃。');
+          render();
+          return;
+        }
+        if (options.returnFocus) walletPlanReturnFocus = options.returnFocus;
+        pendingWalletRedemption = {
+          member,
+          payment,
+          candidates,
+          scenarioTitle: options.scenarioTitle || '',
+          minimumGrossSpendCents: options.minimumGrossSpendCents ?? null,
+          prefillPayCents: options.prefillPayCents ?? null
+        };
+        $('walletRedeemTitle').textContent = options.scenarioTitle
+          ? `${options.scenarioTitle} · ${member} · ${payment}`
+          : `直接核銷 · ${member} · ${payment}`;
+        $('walletRedeemIntro').textContent = options.scenarioTitle
+          ? `已依此方案預選用券；最低原始消費額參考 MOP ${formatMop((options.minimumGrossSpendCents || 0) / CENTS)}。請按實際交易記錄核對實付；最後確認前不會改變券狀態。`
+          : '勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。下一步會要求輸入實付並顯示核對摘要。';
         $('walletRedeemChoices').innerHTML = candidates.map(coupon => {
           const label = coupon.type === 'gov' ? `政府電子優惠 MOP ${formatMop(coupon.amount)}`
             : coupon.type === 'merchant' ? '商戶滿 MOP 100 減 MOP 12'
               : String(coupon.label || '消費禮遇券');
-          return `<label class="wallet-redeem-option"><input type="checkbox" data-wallet-coupon="${escapeHtml(coupon.id)}"><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(couponTypeName(coupon.type))} · ${escapeHtml(coupon.member)}／${escapeHtml(coupon.payment)}</small></span></label>`;
+          const checked = preselectedIds.has(coupon.id) ? ' checked' : '';
+          return `<label class="wallet-redeem-option"><input type="checkbox" data-wallet-coupon="${escapeHtml(coupon.id)}"${checked}><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(couponTypeName(coupon.type))} · ${escapeHtml(coupon.member)}／${escapeHtml(coupon.payment)}</small></span></label>`;
         }).join('');
         $('walletRedeemStatus').className = 'notice neutral';
         $('walletRedeemStatus').textContent = '請勾選本次要用的券；未勾選的券會保留。';
-        $('continueWalletRedeem').disabled = true;
+        const selection = updateWalletRedemptionSelection();
+        $('continueWalletRedeem').disabled = !selection.valid;
         $('walletRedeemDialog').showModal();
-        $('walletRedeemChoices').querySelector('input')?.focus({ preventScroll: true });
+        ($('walletRedeemChoices').querySelector('[data-wallet-coupon]:checked') || $('walletRedeemChoices').querySelector('[data-wallet-coupon]'))?.focus({ preventScroll: true });
       }
 
       function updateWalletRedemptionSelection() {
@@ -1651,18 +1821,21 @@
         event.preventDefault();
         const selection = updateWalletRedemptionSelection();
         if (!selection.valid || !pendingWalletRedemption) return;
-        const { member, payment } = pendingWalletRedemption;
+        const context = pendingWalletRedemption;
+        const { member, payment } = context;
         const couponIds = selection.selected.map(coupon => coupon.id);
         const transaction = {
           member,
           payment,
           couponIds,
           governmentCoupons: selection.selected.filter(coupon => coupon.type === 'gov'),
-          pay: null
+          pay: context.prefillPayCents === null ? null : context.prefillPayCents / CENTS
         };
+        walletPlanTransitioning = Boolean(walletPlanReturnFocus);
         $('walletRedeemDialog').close();
         pendingWalletRedemption = null;
         openRedemptionDialog(couponIds, [transaction]);
+        walletPlanTransitioning = false;
       }
 
       function openRedemptionDialog(couponIds, transactions) {
@@ -1682,6 +1855,9 @@
           const transactionCoupons = transactionIds.map(id => coupons[id]);
           const governmentCoupons = transactionCoupons.filter(coupon => coupon.type === 'gov');
           const governmentAmountCents = governmentCoupons.reduce((sum, coupon) => sum + toCents(coupon.amount), 0);
+          const thresholdCents = governmentCoupons.length
+            ? Math.max(...governmentCoupons.map(coupon => toCents(coupon.amount))) * 3
+            : 0;
           return {
             index,
             member: transaction.member,
@@ -1689,7 +1865,7 @@
             couponIds: transactionIds,
             coupons: transactionCoupons,
             governmentAmountCents,
-            thresholdCents: governmentAmountCents * 3,
+            thresholdCents,
             payCents: transaction.pay !== null && transaction.pay !== undefined && transaction.pay !== '' && Number.isFinite(Number(transaction.pay))
               ? toCents(transaction.pay)
               : null
@@ -1702,6 +1878,9 @@
         }
 
         pendingRedemption = { ids, transactions: normalized };
+        $('redeemDialogTitle').textContent = '確認核銷';
+        $('redeemDialogHint').textContent = '核對實付金額與用券資格；日期預填今天。按「確認並記錄核銷」後才會更新券狀態。';
+        $('redeemDateField').hidden = false;
         $('redeemDate').value = redemptionDateInputValue();
         $('redeemTransactions').innerHTML = normalized.map(transaction => {
           const amountId = `redeemAmount-${transaction.index}`;
@@ -1733,27 +1912,72 @@
             ? '<p class="redeem-sequence">順序：商戶券（每單 1 張）→ 電子券（可多張，逐張核門檻）→ 自付。</p>'
             : '';
           const ruleParts = [];
-          if (transaction.governmentAmountCents) ruleParts.push(`政府券折抵前淨額須達 MOP ${formatMop(transaction.thresholdCents / CENTS)}（電子券面額總和的 3 倍）。`);
+          if (transaction.governmentAmountCents) ruleParts.push(`政府券折抵前淨額須逐張達到每張電子券面額的 3 倍；本組最高門檻 MOP ${formatMop(transaction.thresholdCents / CENTS)}。`);
           if (merchantCoupons.length) ruleParts.push('商戶券每筆限 1 張，優惠前消費須達 MOP 100。');
           const rule = ruleParts.length
             ? `<p class="muted">${ruleParts.join('')}</p>`
             : '<p class="muted">請按支付平台交易記錄輸入本次實付金額。</p>';
           const showThresholdStatus = transaction.governmentAmountCents > 0 || merchantCoupons.length > 0;
+          const thresholdStatus = showThresholdStatus ? `<p id="redeemThreshold-${transaction.index}" class="redeem-threshold-status" role="status" aria-live="polite"></p>` : '';
+          const detailContent = `${couponGroups}${couponOrder}${rule}${thresholdStatus}`;
           return `<section class="redeem-transaction">
             <h3>${escapeHtml(transaction.member)} · ${escapeHtml(transaction.payment)}</h3>
-            ${couponGroups}
-            ${couponOrder}
             <label for="${amountId}">實付金額（MOP，按交易記錄輸入）</label>
             <input id="${amountId}" class="control" data-redemption-amount="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" value="${value}" placeholder="${escapeHtml(placeholder)}" required>
-            ${rule}
-            ${showThresholdStatus ? `<p id="redeemThreshold-${transaction.index}" class="redeem-threshold-status" role="status" aria-live="polite"></p>` : ''}
+            <details class="redeem-review-details"><summary>查看已選券與計算詳情</summary>${detailContent}</details>
           </section>`;
         }).join('');
-        $('redeemValidation').textContent = '只記錄下方列出的券與實付金額。';
+        $('redeemValidation').innerHTML = '';
         $('redeemValidation').classList.remove('invalid');
         $('redeemDialog').showModal();
         validateRedemptionForm();
-        $('redeemDate').focus({ preventScroll: true });
+        $('redeemValidation').focus({ preventScroll: true });
+      }
+
+      function redemptionReviewEntryMarkup(transaction, paidCents, check, merchantCount) {
+        const hasValidPaid = Number.isFinite(paidCents) && paidCents >= 0;
+        const paidLabel = paidCents === null ? '待輸入' : hasValidPaid ? `MOP ${formatMop(paidCents / CENTS)}` : '金額無效';
+        const selectedCoupons = transaction.coupons.map(coupon => {
+          const label = coupon.type === 'gov'
+            ? `政府電子券 ${couponName(coupon)}`
+            : coupon.type === 'merchant'
+              ? `商戶滿減券 ${couponName(coupon)}`
+              : couponName(coupon);
+          return escapeHtml(label);
+        }).join('、') || '無';
+        const thresholdLines = [];
+        const detailRows = [];
+        if (transaction.governmentAmountCents) {
+          const netAmount = hasValidPaid ? `MOP ${formatMop(check.netBeforeGovernmentCents / CENTS)}` : '待輸入';
+          const governmentStatus = !hasValidPaid
+            ? paidCents === null ? '輸入實付後核對' : '請輸入有效金額'
+            : check.governmentShortfallCents > 0
+              ? `尚差 MOP ${formatMop(check.governmentShortfallCents / CENTS)}`
+              : '達標';
+          thresholdLines.push(`<p class="redeem-review-line"><span>政府券資格</span><strong>券前淨額 ${netAmount}／門檻 MOP ${formatMop((check?.governmentThresholdCents ?? transaction.thresholdCents) / CENTS)} · ${governmentStatus}</strong></p>`);
+          detailRows.push(`<p><span>政府券前淨額</span><strong>${netAmount}</strong></p>`);
+          detailRows.push(`<p><span>政府券核銷門檻</span><strong>MOP ${formatMop(transaction.thresholdCents / CENTS)}</strong></p>`);
+        }
+        if (merchantCount) {
+          const purchaseAmount = hasValidPaid ? `MOP ${formatMop(check.purchaseBeforeMerchantDiscountCents / CENTS)}` : '待輸入';
+          const merchantStatus = !hasValidPaid
+            ? paidCents === null ? '輸入實付後核對' : '請輸入有效金額'
+            : check.merchantShortfallCents > 0
+              ? `尚差 MOP ${formatMop(check.merchantShortfallCents / CENTS)}`
+              : check.merchantLimitExceeded ? '超出每筆上限' : '達標';
+          thresholdLines.push(`<p class="redeem-review-line"><span>滿減券資格</span><strong>優惠前消費 ${purchaseAmount}／最低 MOP 100 · ${merchantStatus}</strong></p>`);
+          detailRows.push(`<p><span>滿減券優惠前消費</span><strong>${purchaseAmount}</strong></p>`);
+          detailRows.push('<p><span>滿減券最低消費</span><strong>MOP 100</strong></p>');
+        }
+        if (!thresholdLines.length) thresholdLines.push('<p class="redeem-review-line"><span>用券資格</span><strong>無額外金額門檻</strong></p>');
+        detailRows.push(`<p><span>本次實付金額</span><strong>${paidLabel}</strong></p>`);
+        return `<section class="redeem-review-entry">
+          <p class="redeem-review-paid"><span>實付</span><strong>${paidLabel}</strong></p>
+          <p class="redeem-review-line"><span>家人／支付方式</span><strong>${escapeHtml(transaction.member)}／${escapeHtml(transaction.payment)}</strong></p>
+          <p class="redeem-review-line"><span>已選用券</span><strong>${selectedCoupons}</strong></p>
+          <div class="redeem-review-thresholds">${thresholdLines.join('')}</div>
+          <details class="redeem-review-math"><summary>查看計算詳情</summary><div class="redeem-review-math-rows">${detailRows.join('')}</div></details>
+        </section>`;
       }
 
       function validateRedemptionForm() {
@@ -1764,17 +1988,21 @@
         const summaries = [];
         for (const transaction of pendingRedemption?.transactions || []) {
           const input = $(`redeemAmount-${transaction.index}`);
-          const paidCents = input && input.value !== '' ? toCents(input.value) : NaN;
+          const paidCents = input && input.value !== '' ? toCents(input.value) : null;
           amounts[transaction.index] = paidCents;
           const status = $(`redeemThreshold-${transaction.index}`);
+          const merchantCount = transaction.coupons.filter(coupon => coupon.type === 'merchant').length;
           if (!Number.isFinite(paidCents) || paidCents < 0) {
             failures.push(`請填寫 ${transaction.member} · ${transaction.payment} 的實付金額。`);
             if (status) status.textContent = '請先按交易記錄輸入實付金額。';
+            summaries.push(redemptionReviewEntryMarkup(transaction, paidCents, null, merchantCount));
             continue;
           }
 
-          const merchantCount = transaction.coupons.filter(coupon => coupon.type === 'merchant').length;
-          const check = ConsumeCalc.validateRedemptionThresholds(paidCents, transaction.governmentAmountCents, merchantCount);
+          const governmentVoucherAmountsCents = transaction.coupons
+            .filter(coupon => coupon.type === 'gov')
+            .map(coupon => toCents(coupon.amount));
+          const check = ConsumeCalc.validateRedemptionThresholds(paidCents, transaction.governmentAmountCents, merchantCount, governmentVoucherAmountsCents);
           const transactionFailures = [];
           if (check.merchantLimitExceeded) {
             transactionFailures.push('每筆交易最多核銷一張商戶券。');
@@ -1795,15 +2023,15 @@
             status.textContent = `${ruleParts.join('；')}；${transactionFailures.length ? transactionFailures.join('；') : '門檻符合'}；本次實付 MOP ${formatMop(paidCents / CENTS)}。`;
             status.classList.toggle('shortfall', transactionFailures.length > 0);
           }
-          const summaryParts = [`${transaction.member} · ${transaction.payment}：實付 MOP ${formatMop(paidCents / CENTS)}`];
-          if (transaction.governmentAmountCents) summaryParts.push(`政府券前淨額 MOP ${formatMop(check.netBeforeGovernmentCents / CENTS)}／門檻 MOP ${formatMop(check.governmentThresholdCents / CENTS)}`);
-          if (merchantCount) summaryParts.push(`商戶券優惠前消費 MOP ${formatMop(check.purchaseBeforeMerchantDiscountCents / CENTS)}／最低 MOP 100`);
-          summaries.push(summaryParts.join('；'));
+          summaries.push(redemptionReviewEntryMarkup(transaction, paidCents, check, merchantCount));
         }
         const validation = $('redeemValidation');
-        validation.textContent = failures.length
-          ? failures.join(' ')
-          : `核對完成：${summaries.join('；')}。共 ${pendingRedemption?.ids.length || 0} 張券；按「確認並記錄核銷」後才會標記已核銷。`;
+        const resultMessage = failures.length
+          ? `<p class="redeem-review-error">${escapeHtml(failures.join(' '))}</p>`
+          : '<p class="redeem-review-success">目前門檻符合；按「確認並記錄核銷」後才會更新券狀態。</p>';
+        validation.innerHTML = summaries.length
+          ? `${summaries.join('')}${resultMessage}`
+          : `<p class="redeem-review-error">${escapeHtml(failures.join(' ') || '請核對實付金額與已選用券。')}</p>`;
         validation.classList.toggle('invalid', failures.length > 0);
         $('confirmRedemption').disabled = failures.length > 0 || !pendingRedemption?.ids.length;
         return { valid: failures.length === 0, amounts };
@@ -2222,11 +2450,18 @@
         if (event.target.matches('[data-redemption-amount]')) validateRedemptionForm();
       });
       $('cancelRedemption').addEventListener('click', () => $('redeemDialog').close());
-      $('redeemDialog').addEventListener('close', () => { pendingRedemption = null; });
+      $('redeemDialog').addEventListener('close', () => {
+        pendingRedemption = null;
+        if (walletPlanReturnFocus) restoreWalletPlanFocus();
+      });
       $('walletRedeemForm').addEventListener('submit', continueWalletRedemption);
       $('walletRedeemChoices').addEventListener('change', updateWalletRedemptionSelection);
       $('cancelWalletRedeem').addEventListener('click', () => $('walletRedeemDialog').close());
-      $('walletRedeemDialog').addEventListener('close', () => { pendingWalletRedemption = null; });
+      $('walletRedeemDialog').addEventListener('close', () => {
+        const movingToPaymentReview = walletPlanTransitioning || Boolean(pendingRedemption);
+        pendingWalletRedemption = null;
+        if (walletPlanReturnFocus && !movingToPaymentReview) restoreWalletPlanFocus();
+      });
 
       $('vaultMemberFilter').addEventListener('click', event => {
         const button = event.target.closest('[data-vault-member]');
@@ -2267,6 +2502,19 @@
         if (!button) return;
         openWalletRedemption(button.dataset.member, button.dataset.payment);
       });
+      $('walletSpendPlanTable').addEventListener('click', event => {
+        const button = event.target.closest('[data-wallet-plan-redemption]');
+        if (!button) return;
+        const context = walletPlanRedemptionContexts.get(button.dataset.walletPlanRedemption);
+        if (!context) return;
+        openWalletRedemption(context.member, context.payment, {
+          returnFocus: button,
+          preselectedIds: context.couponIds,
+          scenarioTitle: context.scenarioTitle,
+          minimumGrossSpendCents: context.minimumGrossSpendCents,
+          prefillPayCents: context.prefillPayCents
+        });
+      });
       $('walletRedemptionMemberFilter').addEventListener('change', renderDrawStates);
       $('walletRedemptionPaymentFilter').addEventListener('change', renderDrawStates);
       $('couponList').addEventListener('click', event => {
@@ -2301,5 +2549,7 @@
       $('export').addEventListener('click', exportBackup);
       $('import').addEventListener('change', importBackup);
       document.querySelectorAll('[data-nav]').forEach(button => button.addEventListener('click', () => setActivePanel(button.dataset.nav)));
+      $('walletPlanMemberFilter').addEventListener('change', renderWalletSpendPlans);
+      $('walletPlanPaymentFilter').addEventListener('change', renderWalletSpendPlans);
       initialize();
     })();

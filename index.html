@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#19594c">
-  <meta name="application-version" content="4.9.0">
+  <meta name="application-version" content="4.10.0">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.9.0">
+  <link rel="stylesheet" href="./style.css?v=4.10.0">
 </head>
 <body>
   <header class="hero">
@@ -42,7 +42,7 @@
         <div class="campaign-rules-content">
           <p><strong>抽獎：</strong>合資格商戶週五至日單筆自資實付滿 MOP 50；每個已實名錢包每週最多 3 次。</p>
           <p><strong>商戶券：</strong>每筆最多 1 張，每張只可用一次；原價消費須滿 MOP 100。</p>
-          <p><strong>政府電子券：</strong>同筆可多張。先扣商戶券，再逐張檢查門檻；政府券折抵前淨額須達所用電子券面額總和 × 3。</p>
+          <p><strong>政府電子券：</strong>同筆可多張。先扣商戶／支付優惠，再以折後、政府券折抵前淨額逐張對照每張電子券面額 × 3。</p>
           <p><strong>其他：</strong>禮遇券只限活動商戶；長者／持殘評證人士 MOP 500 卡式優惠另行計算。</p>
           <p class="rule-source">規則來源：<a href="https://www.gov.mo/zh-hant/news/1272571/" target="_blank" rel="noopener noreferrer">澳門政府公告</a> · <a href="https://www.taifungbank.com/zh-hant/promotion/1875" target="_blank" rel="noopener noreferrer">大豐銀行條款</a></p>
         </div>
@@ -63,6 +63,20 @@
           <h3 class="section-heading">家庭成員本週券額及估算自付</h3>
           <div id="memberCompare" class="member-compare-scroll" role="region" aria-label="本週家庭成員券額及估算自付比較表" tabindex="0"></div>
           <p class="table-hint">估算＝尚未核銷政府電子券面額 × 2，不含商戶滿減券；所選週已過期時不顯示估算。手機可橫向滑動，姓名欄固定。</p>
+          <details class="wallet-plan-details">
+            <summary><strong>展開各錢包儲值用券金額</strong><span>查看每位家人／支付方式的最低消費與估算自付</span></summary>
+            <p class="wallet-plan-note">顯示每個錢包用完可用券所需的最低消費與估算自付；如有滿減券，另列使用一張的方案。</p>
+            <details class="wallet-plan-rules" aria-label="儲值用券計算方式">
+              <summary>查看計算方式</summary>
+              <p class="wallet-plan-rule-copy">每個方案假設一筆交易用完該錢包所有可用政府電子券。先扣商戶／支付優惠，再以折後、政府券抵扣前的同一淨額逐張核對每張電子券的 3 倍門檻；同筆可用多張。商戶方案只計一張 MOP 100−12 滿減券；其他滿減券須另開交易。估算自付＝原始消費額−商戶折扣−政府電子券。</p>
+            </details>
+            <div class="wallet-plan-filters" role="group" aria-label="篩選儲值用券規劃的家人和支付方式">
+              <div class="field"><label for="walletPlanMemberFilter">家庭成員</label><select id="walletPlanMemberFilter" class="control" aria-label="按家庭成員篩選錢包"></select></div>
+              <div class="field"><label for="walletPlanPaymentFilter">支付方式</label><select id="walletPlanPaymentFilter" class="control" aria-label="按支付方式篩選錢包"></select></div>
+            </div>
+            <p id="walletPlanSummary" class="wallet-plan-summary" role="status" aria-live="polite"></p>
+            <div id="walletSpendPlanTable" class="wallet-plan-table" aria-label="按家庭成員及支付方式分類的儲值用券參考"></div>
+          </details>
         </article>
 
         <article class="card">
@@ -270,14 +284,14 @@
     <form id="redeemForm" novalidate>
       <div>
         <h2 id="redeemDialogTitle">確認核銷</h2>
-        <p class="hint">核對家人、支付方式、券與實付金額；日期預填今天。儲存後此券會鎖定為已核銷。</p>
+        <p id="redeemDialogHint" class="hint">核對家人、支付方式、券與實付金額；日期預填今天。儲存後此券會鎖定為已核銷。</p>
       </div>
-      <div class="field">
+      <div id="redeemValidation" class="notice neutral redeem-validation" role="status" aria-live="polite" tabindex="-1"></div>
+      <div id="redeemDateField" class="field">
         <label for="redeemDate">核銷日期</label>
         <input id="redeemDate" class="control" type="date" required>
       </div>
       <div id="redeemTransactions" class="redeem-transactions"></div>
-      <div id="redeemValidation" class="notice neutral" role="status" aria-live="polite"></div>
       <div class="dialog-actions">
         <button id="cancelRedemption" class="button secondary" type="button">取消</button>
         <button id="confirmRedemption" class="button" type="submit">確認並記錄核銷</button>
@@ -301,6 +315,6 @@
   </form>
   </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=4.9.0"></script>
+  <script src="./script.js?v=4.10.0"></script>
 </body>
 </html>
