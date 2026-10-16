@@ -1,550 +1,320 @@
-<!DOCTYPE html>
-<html lang="zh-Hant" style="font-size: 18px;">
+<!doctype html>
+<html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 消費獎賞助手 V3.14</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif; background-color: #f1f5f9; color: #1e293b; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
-        .data-table { width: 100%; border-collapse: collapse; background: white; table-layout: fixed; }
-        .data-table th { background: #f8fafc; color: #64748b; font-size: 11px; padding: 10px 2px; border-bottom: 2px solid #e2e8f0; text-align: center; }
-        .data-table td { padding: 10px 2px; border-bottom: 1px solid #f1f5f9; font-size: 13px; text-align: center; vertical-align: middle; }
-        
-        .subtotal-row { background-color: #f8fafc; font-weight: bold; color: #475569; }
-        .subtotal-row td { border-top: 2px solid #e2e8f0; border-bottom: 1px solid #cbd5e1; }
-        .grand-total-row { background-color: #0f172a !important; color: white !important; font-weight: 900; }
-
-        /* 顏色定義 */
-        .bg-爸爸 { background-color: #3b82f6; } .text-爸爸 { color: #3b82f6; border-color: #3b82f6; }
-        .bg-媽媽 { background-color: #ec4899; } .text-媽媽 { color: #ec4899; border-color: #ec4899; }
-        .bg-姐姐 { background-color: #0ea5e9; } .text-姐姐 { color: #0ea5e9; border-color: #0ea5e9; }
-        .bg-昌哥 { background-color: #f59e0b; } .text-昌哥 { color: #f59e0b; border-color: #f59e0b; }
-        .bg-妹妹 { background-color: #8b5cf6; } .text-妹妹 { color: #8b5cf6; border-color: #8b5cf6; }
-        .active-爸爸 { background-color: #3b82f6 !important; color: white !important; }
-        .active-媽媽 { background-color: #ec4899 !important; color: white !important; }
-        .active-姐姐 { background-color: #0ea5e9 !important; color: white !important; }
-        .active-昌哥 { background-color: #f59e0b !important; color: white !important; }
-        .active-妹妹 { background-color: #8b5cf6 !important; color: white !important; }
-
-        /* 篩選標籤樣式 */
-        .filter-chip { flex: 0 0 auto; padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: bold; border: 1.5px solid #e2e8f0; color: #64748b; background: white; transition: all 0.2s; }
-        .filter-chip.active { background: #0f172a !important; color: white !important; border-color: #0f172a !important; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-
-        .member-btn { transition: all 0.2s; background: #f1f5f9; border-radius: 12px; font-weight: bold; font-size: 11px; padding: 12px 0; border: 2px solid transparent; }
-        .coupon-card { width: calc(33.33% - 6px); background: white; border-radius: 12px; padding: 10px; border: 1px solid #e2e8f0; text-align: center; position: relative; }
-        .coupon-card.used { opacity: 0.4; background: #f1f5f9; border-style: dashed; }
-        
-        #smartFab { position: fixed !important; right: 20px !important; bottom: 110px !important; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; z-index: 9999; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); border: none; }
-        .font-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: -0.5px; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#19594c">
+  <meta name="application-version" content="4.10.0">
+  <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
+  <title>澳門消費連環賞｜家庭消費帳冊</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <link rel="stylesheet" href="./style.css?v=4.10.0">
 </head>
-<body class="pb-32">
-
-    <div class="max-w-md mx-auto">
-        <header class="bg-white sticky top-0 z-50 p-4 shadow-sm flex items-center justify-between border-b">
-            <select id="weekDropdown" onchange="changeWeek(this.value)" class="font-black text-slate-800 bg-transparent outline-none flex-1 text-base"></select>
-            <button onclick="toggleZoom()" class="bg-slate-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-slate-500">A±</button>
-        </header>
-
-        <div id="tab-redeem" class="tab-content active p-4 space-y-4">
-            <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                <table class="data-table">
-                    <thead><tr><th style="width:18%">成員</th><th style="width:25%">平台</th><th style="width:27%">可用券</th><th style="width:30%">需消費</th></tr></thead>
-                    <tbody id="redeemTableBody"></tbody>
-                    <tfoot id="redeemTableFoot"></tfoot>
-                </table>
-            </div>
-            
-            <div class="sticky top-[68px] bg-slate-50/90 backdrop-blur-md z-40 py-3 space-y-3 -mx-4 px-4 border-b border-slate-200 mt-4">
-                <div class="flex gap-2 overflow-x-auto no-scrollbar" id="filter-members"></div>
-                <div class="flex gap-2 overflow-x-auto no-scrollbar" id="filter-platforms"></div>
-                <div class="flex items-center gap-2 mt-1">
-                     <select id="filterStatus" onchange="renderList()" class="text-xs bg-white border border-slate-200 px-2 py-1.5 rounded-lg outline-none font-bold text-slate-600">
-                         <option value="All">顯示全部狀態</option>
-                         <option value="Available">僅顯示可用券</option>
-                         <option value="Used">僅顯示已核銷</option>
-                     </select>
-                </div>
-            </div>
-            
-            <div id="individualList" class="flex flex-col gap-6 pb-20 mt-4"></div>
-            <button id="smartFab" onclick="toggleCalc(true)" class="bg-rose-600 text-white">🛒</button>
+<body>
+  <header class="hero">
+    <div class="shell hero-line">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <div class="eyebrow">2026 · 社區消費連環賞 · R2</div>
+          <h1>家庭消費帳冊</h1>
+          <p>全家的抽獎結果、券庫與分單，一頁掌握。</p>
         </div>
+      </div>
+      <span id="connection" class="connection" role="status">準備連線…</span>
+    </div>
+  </header>
 
-        <div id="tab-input" class="tab-content p-4 space-y-6">
-            <div class="bg-white rounded-3xl p-5 shadow-sm border space-y-4">
-                <div class="grid grid-cols-5 gap-1.5" id="memberSelector">
-                    <button onclick="selectUser('爸爸')" id="btn-爸爸" class="member-btn">爸爸</button>
-                    <button onclick="selectUser('媽媽')" id="btn-媽媽" class="member-btn">媽媽</button>
-                    <button onclick="selectUser('姐姐')" id="btn-姐姐" class="member-btn">姐姐</button>
-                    <button onclick="selectUser('昌哥')" id="btn-昌哥" class="member-btn">昌哥</button>
-                    <button onclick="selectUser('妹妹')" id="btn-妹妹" class="member-btn">妹妹</button>
-                </div>
-                <select id="platformSelect" class="w-full p-4 rounded-xl bg-slate-50 border border-slate-200 font-black outline-none">
-                    <option>MPay</option><option>中銀</option><option>工銀</option><option>大豐</option><option>國際</option><option>支付寶</option><option>UEPay</option>
-                </select>
-                <div class="flex gap-3 py-2">
-                    <div id="slot-0" onclick="activeSlot=0; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white" data-touched="false">0</div>
-                    <div id="slot-1" onclick="activeSlot=1; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white" data-touched="false">0</div>
-                    <div id="slot-2" onclick="activeSlot=2; updateSlotUI()" class="flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl bg-white" data-touched="false">0</div>
-                </div>
-                <div class="grid grid-cols-3 gap-3">
-                    <button onclick="setSlotValue(10)" class="bg-white border py-4 rounded-xl font-black">10</button>
-                    <button onclick="setSlotValue(20)" class="bg-white border py-4 rounded-xl font-black">20</button>
-                    <button onclick="setSlotValue(50)" class="bg-white border py-4 rounded-xl font-black">50</button>
-                    <button onclick="setSlotValue(100)" class="bg-amber-50 text-amber-600 border py-4 rounded-xl font-black">100</button>
-                    <button onclick="setSlotValue(200)" class="bg-rose-50 text-rose-600 border py-4 rounded-xl font-black">200</button>
-                    <button onclick="setSlotValue(0)" class="bg-slate-800 text-white py-4 rounded-xl font-black text-xs">謝謝參與</button>
-                </div>
-                <button onclick="submitBatch()" class="w-full bg-slate-800 text-white py-5 rounded-2xl font-black text-lg shadow-lg">📥 登記獎賞</button>
-            </div>
+  <main class="shell main">
+    <div class="week-tools">
+      <div class="weekbar">
+        <label for="week" class="sr-only">活動週次</label>
+        <select id="week" class="control" aria-label="選擇活動週次"></select>
+      </div>
+
+      <details class="campaign-rules" aria-label="2026社區消費連環賞規則提示">
+        <summary class="campaign-rule-summary">
+          <strong>2026 社區消費連環賞</strong>
+          <span id="weekExpiry" class="campaign-rule-expiry" role="status"></span>
+          <span class="campaign-rule-action">查看規則</span>
+        </summary>
+        <div class="campaign-rules-content">
+          <p><strong>抽獎：</strong>合資格商戶週五至日單筆自資實付滿 MOP 50；每個已實名錢包每週最多 3 次。</p>
+          <p><strong>商戶券：</strong>每筆最多 1 張，每張只可用一次；原價消費須滿 MOP 100。</p>
+          <p><strong>政府電子券：</strong>同筆可多張。先扣商戶／支付優惠，再以折後、政府券折抵前淨額逐張對照每張電子券面額 × 3。</p>
+          <p><strong>其他：</strong>禮遇券只限活動商戶；長者／持殘評證人士 MOP 500 卡式優惠另行計算。</p>
+          <p class="rule-source">規則來源：<a href="https://www.gov.mo/zh-hant/news/1272571/" target="_blank" rel="noopener noreferrer">澳門政府公告</a> · <a href="https://www.taifungbank.com/zh-hant/promotion/1875" target="_blank" rel="noopener noreferrer">大豐銀行條款</a></p>
         </div>
+      </details>
+    </div>
 
-        <div id="tab-stat" class="tab-content p-4 space-y-4">
-            <div class="flex justify-between items-end px-1">
-                <h3 class="font-black text-slate-800 text-lg">📊 財務報表</h3>
-                <select id="statMode" onchange="updateStatsUI()" class="text-xs bg-white border border-slate-200 px-2 py-1 rounded-lg outline-none font-bold">
-                    <option value="week">本週</option><option value="all">全期</option>
-                </select>
+    <section class="week-quick-summary" aria-labelledby="quickSummaryHeading">
+      <h2 id="quickSummaryHeading">所選週摘要</h2>
+      <div id="drawStats" class="stats quick-stats" aria-live="polite"></div>
+      <p class="summary-note">首頁表格估算尚未使用的電子券自付；已記錄的實際自付只在最後一頁「家庭券庫」查看。</p>
+    </section>
+
+    <section id="overview" class="panel active" aria-label="本週概覽">
+      <div class="panel-layout">
+        <article class="card">
+          <h2>本週家庭匯總</h2>
+          <p class="lead">先看每位家人尚未使用電子券的估算自付，以及全家合計。</p>
+          <h3 class="section-heading">家庭成員本週券額及估算自付</h3>
+          <div id="memberCompare" class="member-compare-scroll" role="region" aria-label="本週家庭成員券額及估算自付比較表" tabindex="0"></div>
+          <p class="table-hint">估算＝尚未核銷政府電子券面額 × 2，不含商戶滿減券；所選週已過期時不顯示估算。手機可橫向滑動，姓名欄固定。</p>
+          <details class="wallet-plan-details">
+            <summary><strong>展開各錢包儲值用券金額</strong><span>查看每位家人／支付方式的最低消費與估算自付</span></summary>
+            <p class="wallet-plan-note">顯示每個錢包用完可用券所需的最低消費與估算自付；如有滿減券，另列使用一張的方案。</p>
+            <details class="wallet-plan-rules" aria-label="儲值用券計算方式">
+              <summary>查看計算方式</summary>
+              <p class="wallet-plan-rule-copy">每個方案假設一筆交易用完該錢包所有可用政府電子券。先扣商戶／支付優惠，再以折後、政府券抵扣前的同一淨額逐張核對每張電子券的 3 倍門檻；同筆可用多張。商戶方案只計一張 MOP 100−12 滿減券；其他滿減券須另開交易。估算自付＝原始消費額−商戶折扣−政府電子券。</p>
+            </details>
+            <div class="wallet-plan-filters" role="group" aria-label="篩選儲值用券規劃的家人和支付方式">
+              <div class="field"><label for="walletPlanMemberFilter">家庭成員</label><select id="walletPlanMemberFilter" class="control" aria-label="按家庭成員篩選錢包"></select></div>
+              <div class="field"><label for="walletPlanPaymentFilter">支付方式</label><select id="walletPlanPaymentFilter" class="control" aria-label="按支付方式篩選錢包"></select></div>
             </div>
+            <p id="walletPlanSummary" class="wallet-plan-summary" role="status" aria-live="polite"></p>
+            <div id="walletSpendPlanTable" class="wallet-plan-table" aria-label="按家庭成員及支付方式分類的儲值用券參考"></div>
+          </details>
+        </article>
 
-            <div class="grid grid-cols-2 gap-3 mb-2">
-                <div class="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 shadow-sm flex flex-col items-center justify-center">
-                    <div class="text-[10px] font-black text-amber-600 mb-1">🏆 手氣王</div>
-                    <div class="text-2xl font-black text-slate-800" id="rank-member-name">-</div>
-                    <div class="text-xs font-bold text-slate-500 mt-1">累計 <span class="text-amber-600 font-mono" id="rank-member-val">0</span> 元</div>
-                </div>
-                <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 shadow-sm flex flex-col items-center justify-center">
-                    <div class="text-[10px] font-black text-blue-600 mb-1">👑 最強平台</div>
-                    <div class="text-2xl font-black text-slate-800" id="rank-platform-name">-</div>
-                    <div class="text-xs font-bold text-slate-500 mt-1">派發 <span class="text-blue-600 font-mono" id="rank-platform-val">0</span> 元</div>
-                </div>
+        <article class="card">
+          <h2>本週抽獎登記狀態</h2>
+          <p class="lead">需要直接核銷時，可篩選家人和支付方式，縮小可用券清單。</p>
+          <section class="wallet-redemptions" aria-labelledby="walletRedemptionHeading">
+            <h3 id="walletRedemptionHeading" class="section-heading">家人可用券 · 直接核銷</h3>
+            <p class="hint">選擇家人和支付方式，再勾選本次要用的券；核對實付金額及門檻後才記錄，確認前不會更改券狀態。</p>
+            <div class="wallet-redemption-filters" role="group" aria-label="篩選可直接核銷的家人和支付方式">
+              <div class="field">
+                <label for="walletRedemptionMemberFilter">家人</label>
+                <select id="walletRedemptionMemberFilter" class="control" aria-label="按家人篩選可用券"></select>
+              </div>
+              <div class="field">
+                <label for="walletRedemptionPaymentFilter">支付方式</label>
+                <select id="walletRedemptionPaymentFilter" class="control" aria-label="按支付方式篩選可用券"></select>
+              </div>
             </div>
-
-            <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                <table class="data-table">
-                    <thead>
-                        <tr><th style="width:14%">成員</th><th style="width:24%">平台</th><th style="width:20%">已用</th><th style="width:20%">剩餘</th><th style="width:22%">實付</th></tr>
-                    </thead>
-                    <tbody id="memberTableBody"></tbody>
-                    <tfoot id="tableGrandTotal"></tfoot>
-                </table>
+            <div id="walletRedemptionCards" class="wallet-redemption-grid"></div>
+          </section>
+          <details class="weekly-details">
+            <summary>查看「已抽」與「未抽」支付方式 <span>分開檢視券額及尚未抽的方式</span></summary>
+            <section class="weekly-result-group" aria-labelledby="drawnHeading">
+              <h4 class="weekly-result-title" id="drawnHeading">已抽（含部分登記）</h4>
+              <div id="drawnStates" class="weekly-detail-scroll" role="region" aria-label="按家庭成員及支付方式分類的已抽結果" tabindex="0"></div>
+              <p class="table-hint">電子券抽中總額包含已核銷與未核銷；保留券種及登記進度。</p>
             </section>
+            <section class="weekly-result-group" aria-labelledby="undrawnHeading">
+              <h4 class="weekly-result-title" id="undrawnHeading">未抽／未登記</h4>
+              <div id="undrawnStates" class="weekly-detail-scroll" role="region" aria-label="按家庭成員及支付方式分類的未抽方式" tabindex="0"></div>
+              <p class="table-hint">只列已啟用但本週尚無任何結果的支付方式；部分登記方式列於「已抽」。手機版可左右滑動表格。</p>
+            </section>
+          </details>
+          </article>
         </div>
+    </section>
 
-        <nav class="fixed bottom-0 left-0 right-0 h-24 bg-white border-t flex justify-around items-center z-[9000] shadow-2xl">
-            <button onclick="switchTab('redeem')" id="nav-redeem" class="flex-1 flex flex-col items-center font-bold text-sm text-rose-600"><span class="text-2xl mb-1">🛒</span>使用</button>
-            <button onclick="switchTab('input')" id="nav-input" class="flex-1 flex flex-col items-center font-bold text-sm text-slate-400"><span class="text-2xl mb-1">📥</span>登記</button>
-            <button onclick="switchTab('stat')" id="nav-stat" class="flex-1 flex flex-col items-center font-bold text-sm text-slate-400"><span class="text-2xl mb-1">📊</span>帳目</button>
-        </nav>
-    </div>
-
-    <div id="calculatorModal" onclick="if(event.target===this) toggleCalc(false)" class="hidden fixed inset-0 bg-black/80 z-[10000] items-center justify-center p-6">
-        <div class="bg-slate-900 w-full max-w-sm rounded-[40px] p-8 shadow-2xl space-y-6" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center text-white">
-                <h3 class="font-black text-xl">智能湊券助手</h3>
-                <button onclick="toggleCalc(false)" class="text-slate-500 text-xl font-bold">✕</button>
+    <section id="calc" class="panel" aria-label="試算">
+      <article class="card">
+        <h2>家庭分單試算</h2>
+        <p class="lead">輸入優惠前消費總額與已先消費金額，按一次查看最低自付方案；券按家人及支付方式分開核算。試算不含其他支付優惠、禮遇券或 MOP 500 卡式優惠。</p>
+        <form id="calcForm" novalidate>
+          <div class="grid">
+            <div class="field">
+              <label for="totalSpend">計劃消費總額（優惠前，MOP）</label>
+              <input id="totalSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" placeholder="例如 181">
             </div>
-            <p class="text-slate-400 text-[10px] -mt-4">⚠️ 將根據你在外層勾選的「成員與平台」進行篩選分配</p>
-            <input type="number" id="billAmount" oninput="runSmartMatch()" placeholder="輸入金額..." class="w-full bg-slate-800 border-none rounded-3xl py-6 text-4xl font-black text-rose-400 outline-none text-center">
-            
-            <div id="smartResult" class="hidden space-y-4">
-                <div id="smartPlanList" class="space-y-2 max-h-48 overflow-y-auto pr-2 no-scrollbar"></div>
-                <div class="bg-white/5 rounded-3xl p-5 space-y-2 border border-white/5">
-                    <div class="flex justify-between text-slate-400 text-xs"><span>預計抵扣</span><span id="displayDiscount" class="font-mono">0.0</span></div>
-                    <div id="perfectMatchBadge" class="hidden bg-emerald-500/20 text-emerald-400 text-[10px] py-1 rounded-full text-center font-bold tracking-widest uppercase">✨ 完美匹配</div>
-                    <div class="flex justify-between items-end border-t border-white/10 pt-3 mt-2">
-                        <span class="text-white text-sm font-bold">最後還需自付</span>
-                        <span id="predictPay" class="text-3xl font-black text-emerald-400 font-mono">0.0</span>
-                    </div>
+            <div class="field">
+              <label for="firstSpend">已先消費／抽獎首單金額（MOP）</label>
+              <input id="firstSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" value="0">
+              <div class="hint">預設 0；若已先消費（例如 MOP 50），填入已花金額。這筆金額會從剩餘預算扣除，不需指定家人或支付方式。</div>
+            </div>
+            <details class="calc-filters field span-all">
+              <summary>篩選家人與支付方式 <span>預設全家／全部支付方式</span></summary>
+              <div class="grid calc-filter-grid">
+                <div class="field">
+                  <span class="filter-label">試算家人（可多選）</span>
+                  <div id="calcMemberFilter" class="choice-filter" role="group" aria-label="試算家庭成員多選"></div>
+                  <div class="hint">清除後不使用任何家人的券；先選單一成員即可快速切換，再逐位加入其他家人。</div>
                 </div>
-                <div id="upsellHint" class="hidden p-4 rounded-2xl font-bold leading-tight shadow-inner"></div>
-                <button onclick="applySmartRedeem()" class="w-full bg-rose-600 py-4 rounded-2xl font-black text-white shadow-lg active:scale-95 transition-all">確認使用</button>
+                <div class="field">
+                  <span class="filter-label">試算支付方式（可多選）</span>
+                  <div id="calcPaymentFilter" class="choice-filter" role="group" aria-label="試算支付方式多選"></div>
+                  <div class="hint">此篩選會同時套用至所選家人；清除後不使用任何支付方式的券。</div>
+                </div>
+              </div>
+            </details>
+            <div class="field span-all">
+              <label class="merchant-toggle" for="merchantAvailable">
+                <input id="merchantAvailable" type="checkbox">
+                <span>這是獎賞活動商戶，可使用商戶滿減券（每筆限 1 張）</span>
+              </label>
+              <div id="merchantAvailability" class="hint" aria-live="polite"></div>
+              <p class="hint compact-rule">商戶券每筆限 1 張；政府電子券可多張。先扣商戶券，再逐張檢查門檻。</p>
+              <details class="plan-details merchant-example">
+                <summary>示例：有商戶滿減券時的顯示方式</summary>
+                <div class="plan-details-content">
+                  <p class="muted">假設家人甲在支付方式甲抽中一張未核銷商戶券，並在該支付方式消費 MOP 100：</p>
+                  <div class="transaction">
+                    <div class="transaction-title">第 1 單 · 家人甲 · 支付方式甲</div>
+                    <div class="muted">支付金額 MOP 100；實際用券：商戶券 − MOP 12；實花 MOP 88</div>
+                    <div class="coupon-source">商戶券來源：家人甲 · 支付方式甲</div>
+                  </div>
+                  <div class="breakdown-table-wrap" role="region" aria-label="商戶滿減券四欄明細示例，可左右滑動" tabindex="0"><table class="breakdown-table">
+                    <thead><tr><th scope="col">家人／支付方式</th><th scope="col">支付金額</th><th scope="col">折扣金額</th><th scope="col">實花金額</th></tr></thead>
+                    <tbody>
+                      <tr class="payment-detail-row"><th scope="row">家人甲／支付方式甲</th><td data-label="支付金額">MOP 100</td><td data-label="折扣金額">MOP 12</td><td data-label="實花金額">MOP 88</td></tr>
+                      <tr class="member-subtotal"><th scope="row">家人甲 小計</th><td data-label="支付金額">MOP 100</td><td data-label="折扣金額">MOP 12</td><td data-label="實花金額">MOP 88</td></tr>
+                    </tbody>
+                    <tfoot><tr><th scope="row">全家合計</th><td data-label="支付金額">MOP 100</td><td data-label="折扣金額">MOP 12</td><td data-label="實花金額">MOP 88</td></tr></tfoot>
+                  </table></div>
+                  <p class="breakdown-note">此例未計電子券。商戶券只套用在券來源相同的支付方式甲；不會挪用到其他支付方式。</p>
+                </div>
+              </details>
             </div>
+          </div>
+          <div class="calc-submit-row">
+            <button class="button" type="submit">計算用券方案</button>
+            <span class="hint">更改金額或條件後，請再次計算以更新結果。</span>
+          </div>
+        </form>
+        <section id="calcResults" class="calc-results" aria-label="用券試算結果">
+          <h3 class="section-heading">計算結果</h3>
+          <div id="planSummary" class="notice neutral" aria-live="polite">填入計劃總消費額，再按「計算用券方案」。</div>
+          <div id="plans" class="result-cards"></div>
+        </section>
+        <p class="hint">已先消費金額不會套用本次使用的券。試算只適用於所選週尚未到期的券；實際資格及商戶／平台核銷結果以活動與支付平台規則為準。</p>
+      </article>
+    </section>
+
+    <section id="record" class="panel" aria-label="登記三券">
+      <article class="card">
+        <h2>登記三個抽獎結果</h2>
+        <p class="lead">先選家人和支付方式，再為三列各自選已開獎結果；結果未齊時先不儲存。每個錢包每週最多 3 次。</p>
+        <div class="record-targets">
+          <div class="field">
+            <label for="recordMember">家庭成員</label>
+            <select id="recordMember" class="control"></select>
+          </div>
+          <div class="field">
+            <label for="recordWallet">支付方式</label>
+            <select id="recordWallet" class="control"></select>
+          </div>
         </div>
-    </div>
+        <div id="recordStatus" class="statusline" aria-live="polite"></div>
+        <div id="slots" class="slot-list"></div>
+        <button id="saveDraw" class="button full" type="button">儲存三個結果</button>
+        <p class="hint">活動資格、用券順序與到期日請查看上方「查看規則」。</p>
+      </article>
+    </section>
 
-    <script>
-        const firebaseConfig = { apiKey: "AIzaSyCJY3vzA7xuC-bC6PLGk5wGAe_rjPMP4w4", authDomain: "testing-a7aba.firebaseapp.com", projectId: "testing-a7aba", databaseURL: "https://testing-a7aba-default-rtdb.firebaseio.com/", appId: "1:94291975544:web:1fc1e0aff39d8fd0357c8d" };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+    <section id="home" class="panel" aria-label="家庭券庫">
+      <article class="card">
+        <h2>本週家庭券庫</h2>
+        <p class="lead">本週券已按家人與支付方式分組；可篩選狀態。</p>
+        <section class="actual-spend-summary" aria-labelledby="actualSpendHeading">
+          <h3 id="actualSpendHeading">本週實際自付（已記錄）</h3>
+          <p class="hint">只計核銷時記錄的實付；同一交易多張券只計一次。舊紀錄缺金額會顯示「未記錄」，不作推算。</p>
+          <div id="actualSpendSummary" class="actual-spend-scroll" role="region" aria-label="按家庭成員及全家合計的本週實際自付" tabindex="0"></div>
+        </section>
+        <div id="stats" class="stats" aria-live="polite"></div>
+        <details class="weekly-details fun-details">
+          <summary>查看家庭趣味統計</summary>
+          <div class="fun-toolbar">
+            <h3>趣味統計</h3>
+            <label for="statMode">統計期間</label>
+            <select id="statMode" class="control" aria-label="趣味統計期間">
+              <option value="week">本週</option>
+              <option value="all">全期</option>
+            </select>
+          </div>
+          <div id="funStats" class="stats fun-stats" aria-live="polite"></div>
+          <p id="funStatsNote" class="hint" aria-live="polite"></p>
+        </details>
+        <div class="filter-block">
+          <span class="filter-label">家庭成員（可多選）</span>
+          <div id="vaultMemberFilter" class="filter-chips" aria-label="券庫家庭成員多選"></div>
+          <div class="filter-controls vault-filter-controls">
+            <div class="field">
+              <label for="filterWallet">支付方式</label>
+              <select id="filterWallet" class="control"></select>
+            </div>
+            <div class="field">
+              <label for="filterStatus">券狀態</label>
+              <select id="filterStatus" class="control">
+                <option value="all">全部結果</option>
+                <option value="unused">未核銷券</option>
+                <option value="used">已核銷券</option>
+                <option value="expired">已過期未核銷券</option>
+              </select>
+            </div>
+          </div>
+          <p id="filterCount" class="filter-count" aria-live="polite"></p>
+        </div>
+        <div id="couponList" class="coupon-list"></div>
+        <div class="toolbar">
+          <button id="export" class="button secondary" type="button">匯出本週備份</button>
+          <label class="button secondary" for="import">匯入本週備份<input id="import" type="file" accept="application/json,.json" class="hidden"></label>
+        </div>
+      </article>
+      <article class="card">
+        <h2>資料與安全</h2>
+        <p class="hint">本頁不保存支付帳戶、密碼或卡資料。券與家庭支付設定只存於既有 Firebase／本機備份；收緊 Firebase 規則前，請先完成 Authentication、成員白名單及規則模擬。本次不修改雲端資料或部署安全規則。</p>
+      </article>
+      <details class="card settings-card">
+        <summary>家庭支付方式設定 <span class="hint">只需設定一次</span></summary>
+        <div class="settings-content">
+          <p class="lead">依舊期紀錄預先勾選「曾登記使用」的平台，這只是起始建議，不代表確認持有。可在此新增或取消；試算與登記選單會同步更新。</p>
+          <div id="memberSettings" class="member-settings"></div>
+          <p class="hint">舊期未觀察到廣發紀錄，仍保留此選項。家庭設定寫入新一期共用設定，不會回寫舊期資料。</p>
+        </div>
+      </details>
+    </section>
 
-        const MEMBERS = ['爸爸', '媽媽', '姐姐', '昌哥', '妹妹'];
-        const PLATFORMS = ['MPay', '中銀', '工銀', '大豐', '國際', '支付寶', 'UEPay'];
-        const WEEK_DATA = [];
-        const START_DATE = new Date('2026-04-10');
-        for(let i=0; i<10; i++){ 
-            let s = new Date(START_DATE); s.setDate(s.getDate() + i*7); 
-            let e = new Date(s); e.setDate(e.getDate() + 6); 
-            WEEK_DATA.push({ id:i+1, key:`2026-W${i+1}`, start:s, end:e, range:`${s.getMonth()+1}/${s.getDate()}-${e.getMonth()+1}/${e.getDate()}` }); 
-        }
-        const VALID_WEEKS = WEEK_DATA.map(w => w.key);
-        
-        let currentWeekKey = WEEK_DATA[0].key;
-        let currentUser = '爸爸';
-        let activeSlot = 0;
-        let slotValues = [0,0,0];
-        let allCoupons = {};
+    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。</footer>
+  </main>
 
-        // 多選狀態
-        let activeFMem = [...MEMBERS];
-        let activeFPlat = [...PLATFORMS];
-
-        // 智能單選/多選邏輯
-        function selectAllMem() { activeFMem = [...MEMBERS]; renderFilters(); renderList(); }
-        function selectAllPlat() { activeFPlat = [...PLATFORMS]; renderFilters(); renderList(); }
-
-        function toggleFMem(m) {
-            if (activeFMem.length === MEMBERS.length) {
-                activeFMem = [m]; // 全選狀態下點擊，自動變成單選
-            } else {
-                if (activeFMem.includes(m)) {
-                    activeFMem = activeFMem.filter(x => x !== m);
-                    if (activeFMem.length === 0) activeFMem = [...MEMBERS]; // 全取消則恢復全選
-                } else {
-                    activeFMem.push(m); // 追加多選
-                }
-            }
-            renderFilters(); renderList();
-        }
-
-        function toggleFPlat(p) {
-            if (activeFPlat.length === PLATFORMS.length) {
-                activeFPlat = [p];
-            } else {
-                if (activeFPlat.includes(p)) {
-                    activeFPlat = activeFPlat.filter(x => x !== p);
-                    if (activeFPlat.length === 0) activeFPlat = [...PLATFORMS];
-                } else {
-                    activeFPlat.push(p);
-                }
-            }
-            renderFilters(); renderList();
-        }
-
-        function renderFilters() {
-            const allMemActive = activeFMem.length === MEMBERS.length;
-            let mHtml = `<button onclick="selectAllMem()" class="filter-chip ${allMemActive ? 'active' : ''}">全部</button>`;
-            MEMBERS.forEach(m => {
-                const isActive = activeFMem.includes(m) && !allMemActive;
-                mHtml += `<button onclick="toggleFMem('${m}')" class="filter-chip text-${m} ${isActive ? 'active' : ''}">${m}</button>`;
-            });
-            document.getElementById('filter-members').innerHTML = mHtml;
-
-            const allPlatActive = activeFPlat.length === PLATFORMS.length;
-            let pHtml = `<button onclick="selectAllPlat()" class="filter-chip ${allPlatActive ? 'active' : ''}">全部</button>`;
-            PLATFORMS.forEach(p => {
-                const isActive = activeFPlat.includes(p) && !allPlatActive;
-                pHtml += `<button onclick="toggleFPlat('${p}')" class="filter-chip ${isActive ? 'active' : ''}">${p}</button>`;
-            });
-            document.getElementById('filter-platforms').innerHTML = pHtml;
-        }
-
-        function quickRedeem(member, payment) {
-            const wkData = allCoupons[currentWeekKey] || {};
-            const targets = Object.keys(wkData).filter(id => {
-                const c = wkData[id];
-                const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                return m === member && c.payment === payment && c.amount > 0;
-            });
-            if(targets.length === 0) return;
-            const hasUnused = targets.some(id => !wkData[id].used);
-            const updates = {};
-            targets.forEach(id => {
-                if (hasUnused) {
-                    if (!wkData[id].used) {
-                        updates[`coupons/${currentWeekKey}/${id}/used`] = true;
-                        updates[`coupons/${currentWeekKey}/${id}/realPayPart`] = wkData[id].amount * 2;
-                    }
-                } else {
-                    updates[`coupons/${currentWeekKey}/${id}/used`] = false;
-                    updates[`coupons/${currentWeekKey}/${id}/realPayPart`] = 0;
-                }
-            });
-            if(Object.keys(updates).length > 0) db.ref().update(updates);
-        }
-
-        function updateSummaryTable() {
-            const wkData = allCoupons[currentWeekKey] || {};
-            const res = {}; MEMBERS.forEach(m => res[m] = { platforms: {} });
-            let grandRem = 0;
-
-            Object.values(wkData).forEach(c => {
-                const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                if(!res[m]) return;
-                if(!res[m].platforms[c.payment]) res[m].platforms[c.payment] = { rem: 0, used: 0, zero: 0 };
-                if(c.amount === 0) res[m].platforms[c.payment].zero++;
-                else if(c.used) res[m].platforms[c.payment].used += c.amount;
-                else { res[m].platforms[c.payment].rem += c.amount; grandRem += c.amount; }
-            });
-
-            let bodyHtml = "";
-            MEMBERS.forEach(m => {
-                const pKeys = Object.keys(res[m].platforms); if(pKeys.length === 0) return;
-                let mRem = 0;
-                pKeys.forEach((p, idx) => {
-                    const d = res[m].platforms[p]; mRem += d.rem;
-                    let amountHtml = `<div class="font-bold">${d.rem > 0 ? d.rem : '-'}</div>`;
-                    if(d.zero > 0) amountHtml += `<div class="text-[10px] text-slate-400 leading-none mt-0.5">謝謝×${d.zero}</div>`;
-
-                    bodyHtml += `<tr onclick="quickRedeem('${m}','${p}')" class="cursor-pointer active:bg-slate-50 transition-colors">` +
-                                `${idx === 0 ? `<td rowspan="${pKeys.length+1}" class="font-bold text-${m} border-r">${m}</td>` : ''}` +
-                                `<td class="text-slate-500 border-r">${p}</td>` +
-                                `<td>${amountHtml}</td>` +
-                                `<td class="font-mono text-slate-400">${d.rem > 0 ? d.rem*3 : ''}</td>` +
-                                `</tr>`;
-                });
-                bodyHtml += `<tr class="subtotal-row">` +
-                            `<td class="text-right px-2 text-[10px] text-slate-400 border-r">小計</td>` + 
-                            `<td>${mRem}</td>` + 
-                            `<td class="font-mono">${mRem*3}</td>` + 
-                            `</tr>`;
-            });
-            document.getElementById('redeemTableBody').innerHTML = bodyHtml || '<tr><td colspan="4" class="py-10 text-slate-400">無數據</td></tr>';
-            document.getElementById('redeemTableFoot').innerHTML = grandRem > 0 ? `<tr class="grand-total-row"><td colspan="2">總計</td><td>${grandRem}</td><td class="font-mono text-emerald-400">${grandRem*3}</td></tr>` : '';
-
-            renderList(); 
-        }
-
-        function renderList() {
-            const wkData = allCoupons[currentWeekKey] || {};
-            const fStat = document.getElementById('filterStatus').value;
-
-            let listHtml = ""; const groups = {};
-            
-            Object.keys(wkData).forEach(id => {
-                const c = wkData[id]; 
-                const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                
-                if (!activeFMem.includes(m)) return;
-                if (!activeFPlat.includes(c.payment)) return;
-                if (fStat === 'Available' && c.used) return;
-                if (fStat === 'Used' && !c.used) return;
-
-                const key = `${m}-${c.payment}`;
-                if(!groups[key]) groups[key] = { m, p: c.payment, items: [] };
-                groups[key].items.push({ id, ...c });
-            });
-
-            const groupKeys = Object.values(groups);
-            if (groupKeys.length === 0) {
-                document.getElementById('individualList').innerHTML = '<div class="text-center text-slate-400 py-6 text-sm">無符合條件的獎賞</div>';
-                return;
-            }
-
-            groupKeys.forEach(g => {
-                listHtml += `<div class="space-y-3"><div class="flex items-center gap-2 px-1"><span class="w-1.5 h-4 bg-${g.m} rounded-full"></span><span class="font-black text-sm text-slate-700">${g.m} · ${g.p}</span></div><div class="flex flex-wrap gap-2">`;
-                g.items.sort((a,b)=>b.amount-a.amount).forEach(c => {
-                    const isZero = (c.amount === 0);
-                    listHtml += `<div class="coupon-card ${c.used?'used':''}"><div class="${isZero?'text-[10px]':'text-xl'} font-black text-slate-800">${isZero?'謝謝參與':c.amount}</div><div class="flex gap-1 mt-2">${isZero ? `<button onclick="deleteCoupon('${c.id}')" class="w-full text-rose-400 font-bold text-[10px] bg-slate-50 py-1 rounded">刪除</button>` : `<button onclick="toggleCoupon('${c.id}')" class="flex-1 py-1 bg-slate-100 rounded text-[10px] font-bold">${c.used?'還原':'核銷'}</button><button onclick="deleteCoupon('${c.id}')" class="px-1 text-rose-300">✕</button>`}</div></div>`;
-                });
-                listHtml += `</div></div>`;
-            });
-            document.getElementById('individualList').innerHTML = listHtml;
-        }
-
-        function updateStatsUI() {
-            const mode = document.getElementById('statMode').value;
-            const res = {}; MEMBERS.forEach(m => res[m] = { platforms: {} });
-            
-            const memberTotals = {}; MEMBERS.forEach(m => memberTotals[m] = 0);
-            const platformTotals = {}; PLATFORMS.forEach(p => platformTotals[p] = 0);
-            
-            Object.keys(allCoupons).forEach(wk => {
-                if (!wk.startsWith('2026-W')) return;
-                if (mode === 'week' && wk !== currentWeekKey) return;
-                
-                Object.values(allCoupons[wk]).forEach(c => {
-                    const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member;
-                    if (!res[m]) return;
-                    
-                    if(c.amount > 0) { 
-                        if(memberTotals[m] !== undefined) memberTotals[m] += c.amount;
-                        if(platformTotals[c.payment] !== undefined) platformTotals[c.payment] += c.amount;
-
-                        if (!res[m].platforms[c.payment]) res[m].platforms[c.payment] = {用:0, 剩:0, 實:0};
-                        const d = res[m].platforms[c.payment];
-                        if(c.used) { d.用 += c.amount; d.實 += parseFloat(c.realPayPart || (c.amount*2)); } 
-                        else { d.剩 += c.amount; } 
-                    }
-                });
-            });
-
-            let topM = '-', topMVal = 0;
-            MEMBERS.forEach(m => { if(memberTotals[m] > topMVal) { topM = m; topMVal = memberTotals[m]; } });
-            let topP = '-', topPVal = 0;
-            PLATFORMS.forEach(p => { if(platformTotals[p] > topPVal) { topP = p; topPVal = platformTotals[p]; } });
-
-            document.getElementById('rank-member-name').innerText = topMVal > 0 ? topM : '-';
-            document.getElementById('rank-member-val').innerText = topMVal;
-            document.getElementById('rank-platform-name').innerText = topPVal > 0 ? topP : '-';
-            document.getElementById('rank-platform-val').innerText = topPVal;
-
-            let h = ""; let gU=0, gR=0, gP=0;
-            MEMBERS.forEach(m => {
-                const pKeys = Object.keys(res[m].platforms); if(!pKeys.length) return;
-                let mu=0, mr=0, mp=0;
-                pKeys.forEach((p, i) => {
-                    const d = res[m].platforms[p]; mu+=d.用; mr+=d.剩; mp+=d.實;
-                    h += `<tr>` +
-                         `${i===0?`<td rowspan="${pKeys.length+1}" class="text-${m} font-bold border-r">${m}</td>`:''}` +
-                         `<td class="text-[11px] border-r text-slate-500">${p}</td>` +
-                         `<td class="text-slate-400 font-mono">${d.用}</td>` +
-                         `<td class="font-bold font-mono">${d.剩}</td>` +
-                         `<td class="text-emerald-600 font-bold font-mono">${Math.round(d.實)}</td>` +
-                         `</tr>`;
-                });
-                h += `<tr class="subtotal-row">` +
-                     `<td class="text-right px-2 text-[10px] text-slate-400 border-r">小計</td>` + 
-                     `<td class="font-mono">${mu}</td>` + 
-                     `<td class="font-mono">${mr}</td>` + 
-                     `<td class="text-emerald-700 font-mono">${Math.round(mp)}</td>` + 
-                     `</tr>`;
-                gU+=mu; gR+=mr; gP+=mp;
-            });
-            document.getElementById('memberTableBody').innerHTML = h || '<tr><td colspan="5" class="py-10 text-slate-400 text-center">查無活動數據</td></tr>';
-            document.getElementById('tableGrandTotal').innerHTML = `<tr class="grand-total-row"><td colspan="2">總計</td><td class="font-mono">${gU}</td><td class="font-mono">${gR}</td><td class="text-emerald-400 text-lg font-black font-mono">${Math.round(gP)}</td></tr>`;
-        }
-
-        function selectUser(name) { currentUser = name; document.querySelectorAll('.member-btn').forEach(b => { b.className = 'member-btn'; if(b.id === 'btn-'+name) b.classList.add('active-'+name); }); }
-        function setSlotValue(v) { slotValues[activeSlot] = v; document.getElementById(`slot-${activeSlot}`).setAttribute('data-touched', 'true'); activeSlot = (activeSlot + 1) % 3; updateSlotUI(); }
-        function updateSlotUI() { slotValues.forEach((v, i) => { const el = document.getElementById(`slot-${i}`); const t = el.getAttribute('data-touched')==='true'; el.innerText = (t && v===0)?'謝謝':v; el.className = `flex-1 py-6 border-2 rounded-2xl text-center font-black text-2xl transition-all ${t ? 'border-slate-800 bg-white' : 'border-slate-200 bg-slate-50 text-slate-300'} ${i===activeSlot?'border-rose-500 scale-105 shadow-md':''}`; }); }
-        function submitBatch() { 
-            const p = document.getElementById('platformSelect').value; let count = 0;
-            slotValues.forEach((v, i) => { if(document.getElementById(`slot-${i}`).getAttribute('data-touched')==='true') { db.ref(`coupons/${currentWeekKey}/${Date.now()+i}`).set({ amount:v, member:currentUser, payment:p, used:false }); count++; }}); 
-            if(count>0) { slotValues=[0,0,0]; activeSlot=0; [0,1,2].forEach(i => document.getElementById(`slot-${i}`).setAttribute('data-touched', 'false')); updateSlotUI(); }
-        }
-        function switchTab(t) { 
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); 
-            document.querySelectorAll('nav button').forEach(b => b.classList.replace('text-rose-600', 'text-slate-400')); 
-            document.getElementById('tab-'+t).classList.add('active'); 
-            document.getElementById('nav-'+t).classList.replace('text-slate-400', 'text-rose-600'); 
-            if(t==='stat') updateStatsUI(); 
-            document.getElementById('smartFab').style.display = (t === 'redeem') ? 'flex' : 'none';
-        }
-        function changeWeek(v) { currentWeekKey = v; updateSummaryTable(); updateStatsUI(); }
-        function deleteCoupon(id) { if(confirm('確定刪除？')) db.ref(`coupons/${currentWeekKey}/${id}`).remove(); }
-        function toggleCoupon(id) { const c = allCoupons[currentWeekKey][id]; if(c.amount === 0) return; const ns = !c.used; db.ref(`coupons/${currentWeekKey}/${id}`).update({ used: ns, realPayPart: ns ? (c.amount*2) : 0 }); }
-        function toggleCalc(s) { document.getElementById('calculatorModal').classList.toggle('hidden', !s); if(s) { document.getElementById('billAmount').value=''; document.getElementById('smartResult').classList.add('hidden'); document.getElementById('upsellHint').classList.add('hidden'); } }
-        function toggleZoom() { document.documentElement.style.fontSize = document.documentElement.style.fontSize === '22px' ? '18px' : '22px'; }
-        
-        // 恢復並升級智能提示邏輯
-        function runSmartMatch() {
-            const bill = parseFloat(document.getElementById('billAmount').value) || 0;
-            const resArea = document.getElementById('smartResult');
-            const upsellHint = document.getElementById('upsellHint');
-            const badge = document.getElementById('perfectMatchBadge');
-            
-            if(bill <= 0) { resArea.classList.add('hidden'); return; }
-            resArea.classList.remove('hidden');
-            
-            const av = []; 
-            Object.keys(allCoupons[currentWeekKey] || {}).forEach(id => { 
-                const c = allCoupons[currentWeekKey][id];
-                const m = (c.member === '家姐' || c.member === '姐') ? '姐姐' : c.member; 
-                // 受外部多選面板控制
-                if(!c.used && c.amount > 0 && activeFMem.includes(m) && activeFPlat.includes(c.payment)) {
-                    av.push({id, ...c, m}); 
-                }
-            });
-            av.sort((a,b)=>b.amount-a.amount);
-            
-            let remBill = bill; let disc = 0; let totalReq = 0; let matched = []; let matchedIds = new Set(); let html = "";
-            let unusedCoupons = [];
-
-            for(let c of av) { 
-                const req = c.amount * 3;
-                if(remBill >= req) { 
-                    remBill -= req; disc += c.amount; totalReq += req;
-                    html += `<div class="flex justify-between items-center text-white bg-white/5 p-3 rounded-2xl text-xs border border-white/5"><span>${c.m} · ${c.payment}</span><span class="font-black text-rose-400">-${c.amount}</span></div>`; 
-                    matched.push(c); matchedIds.add(c.id);
-                } else {
-                    unusedCoupons.push(c);
-                }
-            }
-            
-            let nextBest = null; let minDiff = Infinity;
-            for(let c of av) {
-                if(matchedIds.has(c.id)) continue;
-                const diff = (c.amount * 3) - remBill;
-                if(diff > 0 && diff < minDiff) { minDiff = diff; nextBest = { diff, name: `${c.m}的${c.amount}元券` }; }
-            }
-
-            // 智能提示渲染
-            if(nextBest) {
-                upsellHint.classList.remove('hidden');
-                upsellHint.className = "mt-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 shadow-inner";
-                upsellHint.innerHTML = `<p class="text-[11px]">💡 再湊 MOP <span class="text-sm font-black">${nextBest.diff.toFixed(1)}</span>，即可多用一張 <span class="underline">${nextBest.name}</span></p>`;
-            } else if (matched.length > 0) {
-                const overSpend = bill - totalReq;
-                upsellHint.classList.remove('hidden');
-                upsellHint.className = "mt-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner";
-                upsellHint.innerHTML = `<p class="text-[11px]">🎉 所有符合篩選的可用券已用完！<br>此金額已超出最低門檻 <span class="text-sm font-black">MOP ${overSpend.toFixed(1)}</span></p>`;
-            } else {
-                upsellHint.classList.add('hidden');
-            }
-
-            document.getElementById('smartPlanList').innerHTML = html || '<div class="text-slate-500 text-center py-4 text-sm">金額未達門檻</div>';
-            document.getElementById('displayDiscount').innerText = `- MOP ${disc.toFixed(1)}`;
-            document.getElementById('predictPay').innerText = (bill - disc).toFixed(1);
-            badge.classList.toggle('hidden', remBill > 1 || bill === 0);
-            
-            window.tempMatched = matched;
-        }
-        
-        function applySmartRedeem() {
-            if(!window.tempMatched?.length) return;
-            const bill = parseFloat(document.getElementById('billAmount').value);
-            const totalC = window.tempMatched.reduce((a,b)=>a+b.amount,0);
-            window.tempMatched.forEach(t => db.ref(`coupons/${currentWeekKey}/${t.id}`).update({ used:true, realPayPart: (t.amount/totalC)*(bill-totalC) }));
-            toggleCalc(false);
-        }
-
-        db.ref('coupons').on('value', s => { allCoupons = s.val() || {}; updateSummaryTable(); updateStatsUI(); });
-        window.onload = () => {
-			const drp = document.getElementById('weekDropdown');
-			
-			// 1. 渲染下拉選單
-			WEEK_DATA.forEach(w => {
-				const o = document.createElement('option'); 
-				o.value = w.key;
-				o.textContent = `2026 第 ${w.id} 週 (${w.range})`;
-				drp.appendChild(o);
-			});
-		
-			// 2. 精確日期比對
-			const now = new Date();
-			// 建議將 now 的時間重置到當天起點，避免時分秒影響比較
-			const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-		
-			const found = WEEK_DATA.find(w => {
-				const s = new Date(w.start);
-				const e = new Date(w.end);
-				// 確保比較的是日期的起點與終點
-				s.setHours(0,0,0,0);
-				e.setHours(23,59,59,999);
-				return today >= s && today <= e;
-			});
-		
-			if (found) {
-				currentWeekKey = found.key;
-				drp.value = found.key;
-				// 3. 重要：手動觸發一次切換邏輯，確保 Firebase 數據渲染到 UI
-				changeWeek(found.key);
-			}
-			
-			// 初始化其他 UI 組件
-			selectUser('爸爸');
-			updateSlotUI();
-			renderFilters();
-		};
-    </script>
+  <nav class="bottom-nav" aria-label="主要導覽">
+    <button class="button secondary" data-nav="overview" type="button" aria-current="page">本週</button>
+    <button class="button secondary" data-nav="calc" type="button">試算</button>
+    <button class="button secondary" data-nav="record" type="button">登記三券</button>
+    <button class="button secondary" data-nav="home" type="button">家庭券庫</button>
+  </nav>
+  <dialog id="redeemDialog" class="redeem-dialog" aria-labelledby="redeemDialogTitle">
+    <form id="redeemForm" novalidate>
+      <div>
+        <h2 id="redeemDialogTitle">確認核銷</h2>
+        <p id="redeemDialogHint" class="hint">核對家人、支付方式、券與實付金額；日期預填今天。儲存後此券會鎖定為已核銷。</p>
+      </div>
+      <div id="redeemValidation" class="notice neutral redeem-validation" role="status" aria-live="polite" tabindex="-1"></div>
+      <div id="redeemDateField" class="field">
+        <label for="redeemDate">核銷日期</label>
+        <input id="redeemDate" class="control" type="date" required>
+      </div>
+      <div id="redeemTransactions" class="redeem-transactions"></div>
+      <div class="dialog-actions">
+        <button id="cancelRedemption" class="button secondary" type="button">取消</button>
+        <button id="confirmRedemption" class="button" type="submit">確認並記錄核銷</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="walletRedeemDialog" class="redeem-dialog wallet-redeem-dialog" aria-labelledby="walletRedeemTitle">
+    <form id="walletRedeemForm" novalidate>
+      <div>
+        <h2 id="walletRedeemTitle">直接核銷</h2>
+        <p id="walletRedeemIntro" class="hint">勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。</p>
+      </div>
+      <fieldset id="walletRedeemChoices" class="wallet-redeem-choices">
+        <legend>選擇本次使用的券</legend>
+      </fieldset>
+      <div id="walletRedeemStatus" class="notice neutral" role="status" aria-live="polite"></div>
+      <div class="dialog-actions">
+        <button id="cancelWalletRedeem" class="button secondary" type="button">取消</button>
+        <button id="continueWalletRedeem" class="button" type="submit">下一步：核對實付</button>
+      </div>
+  </form>
+  </dialog>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <script src="./script.js?v=4.10.0"></script>
 </body>
 </html>
