@@ -1066,7 +1066,9 @@
       }
       function transactionRecordMarkup(t) {
         const { member, payment } = t; const r = t.redemption; const estimated = r.amountKind === 'estimate';
-        return `<div class="transaction-record"><span>交易記錄：支出 ${transactionAmountLabel(t, 'actualSpendCents')}／實付 ${transactionAmountLabel(t, 'actualPaidCents')}</span>${!t.undone ? '<small>估算為非實際金額，不計入已記錄金額。</small>' : ''}${t.undone ? `<strong class="restored-marker">${estimated ? '已復原（估算已取消）' : '已復原（保留金融紀錄）'}</strong>` : ''}${r.transactionId && t.undone && !estimated ? `<button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : ''}${r.transactionId && !t.undone ? `<div class="undo-transaction"><span><strong>${escapeHtml(member)}／${escapeHtml(payment)}</strong> · ${t.rows.map(c => `${escapeHtml(couponName(c))}（${escapeHtml(c.id)}）`).join('、')}</span><button type="button" class="text-button" data-undo-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">復原此筆核銷</button><small class="undo-warning">只改本網站紀錄，不會退回支付平台的券；平台已核銷請勿復原。</small></div><button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : !r.transactionId ? '<small>舊紀錄缺少交易識別，未推算金額</small>' : ''}</div>`;
+        const validTransactionId = typeof r.transactionId === 'string' && Boolean(r.transactionId.trim());
+        const canUndo = validTransactionId && !t.undone && t.rows.every(c => coupons[c.id]?.used && coupons[c.id]?.redemption?.transactionId === r.transactionId);
+        return `<div class="transaction-record"><span>交易記錄：支出 ${transactionAmountLabel(t, 'actualSpendCents')}／實付 ${transactionAmountLabel(t, 'actualPaidCents')}</span>${!t.undone ? '<small>估算為非實際金額，不計入已記錄金額。</small>' : ''}${t.undone ? `<strong class="restored-marker">${estimated ? '已復原（估算已取消）' : '已復原（保留金融紀錄）'}</strong>` : ''}${validTransactionId && t.undone && !estimated ? `<button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : ''}${canUndo ? `<div class="undo-transaction"><span><strong>${escapeHtml(member)}／${escapeHtml(payment)}</strong> · ${t.rows.map(c => `${escapeHtml(couponName(c))}（${escapeHtml(c.id)}）`).join('、')}</span><small class="undo-warning">將刪除此筆在本網站的核銷及支出／實付記錄（含估算），只將這筆交易的券還原為未使用；不會撤銷支付平台核銷、退券或退款，平台已核銷請勿復原。</small><button type="button" class="text-button" data-undo-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">復原並刪除此筆核銷記錄</button></div><button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : !validTransactionId ? '<small>舊紀錄缺少交易識別，未推算金額</small>' : ''}</div>`;
       }
       function renderDrawStates() {
         const all = Object.entries(coupons).map(([id, c]) => ({ ...c, id }));
@@ -2129,29 +2131,39 @@
       }
 
       async function undoTransaction(member, payment, transactionId) {
-        const lockKey = `${member}|${payment}|${transactionId}`;
+        // Never infer a legacy transaction from a wallet, timestamp, or missing ID.
+        if (typeof transactionId !== 'string' || !transactionId.trim() || !member || !payment) return;
+        const operationWeek = currentWeek, operationPath = weekPath();
+        const lockKey = JSON.stringify([operationWeek, member, payment, transactionId]);
         if (undoingTransactions.has(lockKey)) return;
         const rows = walletRecords(member, payment).filter(c => c.used && c.redemption?.transactionId === transactionId);
         if (!rows.length || rows.some(c => c.member !== member || c.payment !== payment)) return;
+        if (!online || !database) { showToast('尚未連接雲端；未復原或刪除，請連線後再試。'); return; }
         undoingTransactions.add(lockKey);
-        const operationWeek = currentWeek, operationPath = weekPath();
-        const r = rows[0].redemption;
         const current = walletRecords(member, payment).filter(c => c.used && c.redemption?.transactionId === transactionId);
         if (current.length !== rows.length || current.some(c => !rows.some(old => old.id === c.id))) { undoingTransactions.delete(lockKey); showToast('原交易已變更，未復原。'); return; }
-        const now = Date.now(), updates = {}, next = {};
+        const updates = {}, next = {};
         for (const c of current) {
-          const redemption = { ...c.redemption, undoAudit: { undoneAt: now, transactionId, member, payment, couponIds: current.map(row => row.id), amountKind: r.amountKind || 'legacy', actualSpendCents: r.actualSpendCents ?? null, actualPaidCents: r.actualPaidCents ?? null, confirmed: true } };
           updates[`coupons/${c.id}/used`] = false;
           updates[`coupons/${c.id}/usedAt`] = null;
-          updates[`coupons/${c.id}/redemption`] = redemption;
-          next[c.id] = { ...c, used: false, usedAt: null, redemption };
+          // RTDB null deletes the entire monetary record, including estimates/audit.
+          updates[`coupons/${c.id}/redemption`] = null;
+          next[c.id] = { ...c, used: false, usedAt: null };
+          delete next[c.id].redemption;
+          if (Array.isArray(c.redemptionHistory) && c.redemptionHistory.some(r => r?.transactionId === transactionId)) {
+            const history = c.redemptionHistory.filter(r => r?.transactionId !== transactionId);
+            updates[`coupons/${c.id}/redemptionHistory`] = history.length ? history : null;
+            if (history.length) next[c.id].redemptionHistory = history;
+            else delete next[c.id].redemptionHistory;
+          }
         }
         try {
-          if (online && database) await database.ref(operationPath).update(updates);
+          // One atomic multi-path write; do not change local state until it succeeds.
+          await database.ref(operationPath).update(updates);
           localData[operationWeek] = { coupons: { ...(localData[operationWeek]?.coupons || {}), ...next } };
           try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* keep remote update */ }
           if (currentWeek === operationWeek) { Object.assign(coupons, next); invalidateAllPeriodStats(); render(); }
-          showToast('已復原本網站紀錄；金融紀錄及實際金額保留。');
+          showToast(`已將 ${current.length} 張券還原為未使用，並刪除此筆核銷及支出／實付記錄（含估算）。`);
         } catch { showToast('雲端儲存失敗；未復原，請稍後再試。'); }
         finally { undoingTransactions.delete(lockKey); }
       }
