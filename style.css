@@ -781,3 +781,5 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
   .campaign-rule-expiry { grid-column: 1; grid-row: 1; }
   .campaign-rule-action { grid-column: 2; grid-row: 1; }
 }
+.undo-transaction { display: grid; gap: 5px; padding: 8px 10px; border-left: 3px solid var(--accent, #19594c); background: #f4f8f6; }
+.undo-warning { color: #7a3d16; font-size: .9em; }

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#19594c">
-  <meta name="application-version" content="4.11.0">
+  <meta name="application-version" content="4.12.0">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.11.0">
+  <link rel="stylesheet" href="./style.css?v=4.12.0">
 </head>
 <body>
   <header class="hero">
@@ -225,7 +225,7 @@
       </details>
     </section>
 
-    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.11.0</small></footer>
+    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.12.0</small></footer>
   </main>
 
   <nav class="bottom-nav" aria-label="主要導覽">
@@ -238,7 +238,7 @@
     <form id="redeemForm" novalidate>
       <div>
         <h2 id="redeemDialogTitle">確認核銷</h2>
-        <p id="redeemDialogHint" class="hint">核對家人、支付方式、券與實付金額；日期預填今天。儲存後此券會鎖定為已核銷。</p>
+        <p id="redeemDialogHint" class="hint">預填金額為估算；請核對或修改，確認後記為本筆實際金額及核銷。</p>
       </div>
       <div id="redeemValidation" class="notice neutral redeem-validation" role="status" aria-live="polite" tabindex="-1"></div>
       <div id="redeemDateField" class="field">
@@ -248,7 +248,7 @@
       <div id="redeemTransactions" class="redeem-transactions"></div>
       <div class="dialog-actions">
         <button id="cancelRedemption" class="button secondary" type="button">取消</button>
-        <button id="confirmRedemption" class="button" type="submit">確認並記錄核銷</button>
+        <button id="confirmRedemption" class="button" type="submit">確認金額並核銷</button>
       </div>
     </form>
   </dialog>
@@ -279,6 +279,6 @@
     </form>
   </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=4.11.0"></script>
+  <script src="./script.js?v=4.12.0"></script>
 </body>
 </html>
