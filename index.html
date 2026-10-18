@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#19594c">
-  <meta name="application-version" content="4.10.0">
+  <meta name="application-version" content="4.11.0">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.10.0">
+  <link rel="stylesheet" href="./style.css?v=4.11.0">
 </head>
 <body>
   <header class="hero">
@@ -19,7 +19,7 @@
         <div>
           <div class="eyebrow">2026 · 社區消費連環賞 · R2</div>
           <h1>家庭消費帳冊</h1>
-          <p>全家的抽獎結果、券庫與分單，一頁掌握。</p>
+          <p>本週券額與用券記錄</p>
         </div>
       </div>
       <span id="connection" class="connection" role="status">準備連線…</span>
@@ -37,81 +37,35 @@
         <summary class="campaign-rule-summary">
           <strong>2026 社區消費連環賞</strong>
           <span id="weekExpiry" class="campaign-rule-expiry" role="status"></span>
-          <span class="campaign-rule-action">查看規則</span>
+          <span class="campaign-rule-action">i 活動規則</span>
         </summary>
         <div class="campaign-rules-content">
           <p><strong>抽獎：</strong>合資格商戶週五至日單筆自資實付滿 MOP 50；每個已實名錢包每週最多 3 次。</p>
           <p><strong>商戶券：</strong>每筆最多 1 張，每張只可用一次；原價消費須滿 MOP 100。</p>
-          <p><strong>政府電子券：</strong>同筆可多張。先扣商戶／支付優惠，再以折後、政府券折抵前淨額逐張對照每張電子券面額 × 3。</p>
+          <p><strong>政府電子券：</strong>同筆可多張。先扣商戶／支付優惠；政府券按面額由大至小核對剩餘合資格額，每用一張扣去面額 × 3，再核對下一張。</p>
           <p><strong>其他：</strong>禮遇券只限活動商戶；長者／持殘評證人士 MOP 500 卡式優惠另行計算。</p>
           <p class="rule-source">規則來源：<a href="https://www.gov.mo/zh-hant/news/1272571/" target="_blank" rel="noopener noreferrer">澳門政府公告</a> · <a href="https://www.taifungbank.com/zh-hant/promotion/1875" target="_blank" rel="noopener noreferrer">大豐銀行條款</a></p>
         </div>
       </details>
     </div>
 
-    <section class="week-quick-summary" aria-labelledby="quickSummaryHeading">
-      <h2 id="quickSummaryHeading">所選週摘要</h2>
-      <div id="drawStats" class="stats quick-stats" aria-live="polite"></div>
-      <p class="summary-note">首頁表格估算尚未使用的電子券自付；已記錄的實際自付只在最後一頁「家庭券庫」查看。</p>
-    </section>
-
     <section id="overview" class="panel active" aria-label="本週概覽">
-      <div class="panel-layout">
-        <article class="card">
-          <h2>本週家庭匯總</h2>
-          <p class="lead">先看每位家人尚未使用電子券的估算自付，以及全家合計。</p>
-          <h3 class="section-heading">家庭成員本週券額及估算自付</h3>
-          <div id="memberCompare" class="member-compare-scroll" role="region" aria-label="本週家庭成員券額及估算自付比較表" tabindex="0"></div>
-          <p class="table-hint">估算＝尚未核銷政府電子券面額 × 2，不含商戶滿減券；所選週已過期時不顯示估算。手機可橫向滑動，姓名欄固定。</p>
-          <details class="wallet-plan-details">
-            <summary><strong>展開各錢包儲值用券金額</strong><span>查看每位家人／支付方式的最低消費與估算自付</span></summary>
-            <p class="wallet-plan-note">顯示每個錢包用完可用券所需的最低消費與估算自付；如有滿減券，另列使用一張的方案。</p>
-            <details class="wallet-plan-rules" aria-label="儲值用券計算方式">
-              <summary>查看計算方式</summary>
-              <p class="wallet-plan-rule-copy">每個方案假設一筆交易用完該錢包所有可用政府電子券。先扣商戶／支付優惠，再以折後、政府券抵扣前的同一淨額逐張核對每張電子券的 3 倍門檻；同筆可用多張。商戶方案只計一張 MOP 100−12 滿減券；其他滿減券須另開交易。估算自付＝原始消費額−商戶折扣−政府電子券。</p>
-            </details>
-            <div class="wallet-plan-filters" role="group" aria-label="篩選儲值用券規劃的家人和支付方式">
-              <div class="field"><label for="walletPlanMemberFilter">家庭成員</label><select id="walletPlanMemberFilter" class="control" aria-label="按家庭成員篩選錢包"></select></div>
-              <div class="field"><label for="walletPlanPaymentFilter">支付方式</label><select id="walletPlanPaymentFilter" class="control" aria-label="按支付方式篩選錢包"></select></div>
-            </div>
-            <p id="walletPlanSummary" class="wallet-plan-summary" role="status" aria-live="polite"></p>
-            <div id="walletSpendPlanTable" class="wallet-plan-table" aria-label="按家庭成員及支付方式分類的儲值用券參考"></div>
-          </details>
-        </article>
-
-        <article class="card">
-          <h2>本週抽獎登記狀態</h2>
-          <p class="lead">需要直接核銷時，可篩選家人和支付方式，縮小可用券清單。</p>
-          <section class="wallet-redemptions" aria-labelledby="walletRedemptionHeading">
-            <h3 id="walletRedemptionHeading" class="section-heading">家人可用券 · 直接核銷</h3>
-            <p class="hint">選擇家人和支付方式，再勾選本次要用的券；核對實付金額及門檻後才記錄，確認前不會更改券狀態。</p>
-            <div class="wallet-redemption-filters" role="group" aria-label="篩選可直接核銷的家人和支付方式">
-              <div class="field">
-                <label for="walletRedemptionMemberFilter">家人</label>
-                <select id="walletRedemptionMemberFilter" class="control" aria-label="按家人篩選可用券"></select>
-              </div>
-              <div class="field">
-                <label for="walletRedemptionPaymentFilter">支付方式</label>
-                <select id="walletRedemptionPaymentFilter" class="control" aria-label="按支付方式篩選可用券"></select>
-              </div>
-            </div>
-            <div id="walletRedemptionCards" class="wallet-redemption-grid"></div>
-          </section>
-          <details class="weekly-details">
-            <summary>查看「已抽」與「未抽」支付方式 <span>分開檢視券額及尚未抽的方式</span></summary>
-            <section class="weekly-result-group" aria-labelledby="drawnHeading">
-              <h4 class="weekly-result-title" id="drawnHeading">已抽（含部分登記）</h4>
-              <div id="drawnStates" class="weekly-detail-scroll" role="region" aria-label="按家庭成員及支付方式分類的已抽結果" tabindex="0"></div>
-              <p class="table-hint">電子券抽中總額包含已核銷與未核銷；保留券種及登記進度。</p>
-            </section>
-            <section class="weekly-result-group" aria-labelledby="undrawnHeading">
-              <h4 class="weekly-result-title" id="undrawnHeading">未抽／未登記</h4>
-              <div id="undrawnStates" class="weekly-detail-scroll" role="region" aria-label="按家庭成員及支付方式分類的未抽方式" tabindex="0"></div>
-              <p class="table-hint">只列已啟用但本週尚無任何結果的支付方式；部分登記方式列於「已抽」。手機版可左右滑動表格。</p>
-            </section>
-          </details>
-          </article>
-        </div>
+      <section class="family-overview" aria-labelledby="matrixHeading">
+        <div class="section-line"><h2 id="matrixHeading">全家本週比較 <small>金額 MOP</small></h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="matrixHelp">i 金額說明</button></div>
+        <div id="matrixHelp" class="help-copy" hidden>粗估最低購物額＝所選週尚未使用政府電子券面額 × 3，不含商戶券及禮遇券，不是實際支出或實付。已記錄金額只計實際交易，同筆多張券只計一次；缺少金額顯示「未記錄」。最高標示只比較政府券抽中面額，包含已用券。</div>
+        <div id="memberCompare" aria-label="五位家人及全家合計金額比較"></div>
+      </section>
+      <section class="family-wallets" aria-labelledby="walletRedemptionHeading">
+        <div class="section-line"><h2 id="walletRedemptionHeading">各人支付方式</h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="walletHelp">i 用券規則</button></div>
+        <p id="walletHelp" class="help-copy" hidden>展開不會核銷。只預選此錢包的未用政府券，商戶券預設不選，每筆最多一張、滿 MOP 100 減 12，先扣商戶券；政府券由大至小逐張核對剩餘額，每用一張扣去面額 × 3 再核對下一張。不可跨人、錢包或交易合併。沒有實際金額也可確認，會明確保存為估算；之後可更正同一筆。週期按澳門時間週五 00:00 至週四 23:59。</p>
+        <div id="walletRedemptionCards" class="flat-wallets"></div>
+      </section>
+      <div hidden aria-hidden="true">
+        <div id="drawStats"></div><div id="drawnStates"></div><div id="undrawnStates"></div>
+        <select id="walletRedemptionMemberFilter"></select><select id="walletRedemptionPaymentFilter"></select>
+        <select id="walletPlanMemberFilter"></select><select id="walletPlanPaymentFilter"></select>
+        <div id="walletPlanSummary"></div><div id="walletSpendPlanTable"></div>
+      </div>
     </section>
 
     <section id="calc" class="panel" aria-label="試算">
@@ -271,7 +225,7 @@
       </details>
     </section>
 
-    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。</footer>
+    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.11.0</small></footer>
   </main>
 
   <nav class="bottom-nav" aria-label="主要導覽">
@@ -310,11 +264,21 @@
       <div id="walletRedeemStatus" class="notice neutral" role="status" aria-live="polite"></div>
       <div class="dialog-actions">
         <button id="cancelWalletRedeem" class="button secondary" type="button">取消</button>
-        <button id="continueWalletRedeem" class="button" type="submit">下一步：核對實付</button>
+        <button id="continueWalletRedeem" class="button" type="submit">下一步：確認用券</button>
       </div>
   </form>
   </dialog>
+  <dialog id="correctionDialog" class="redeem-dialog" aria-labelledby="correctionTitle">
+    <form id="correctionForm" novalidate>
+      <h2 id="correctionTitle">更正同一筆實際金額</h2>
+      <p id="correctionContext" class="hint"></p>
+      <label for="correctionSpend">已記錄支出（優惠前，MOP）</label><input id="correctionSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" required>
+      <label for="correctionPaid">已記錄實付（MOP）</label><input id="correctionPaid" class="control" type="number" min="0" step="0.01" inputmode="decimal" required>
+      <p id="correctionStatus" role="status"></p>
+      <div class="dialog-actions"><button id="cancelCorrection" type="button" class="button secondary">取消</button><button id="saveCorrection" type="submit" class="button">儲存更正</button></div>
+    </form>
+  </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=4.10.0"></script>
+  <script src="./script.js?v=4.11.0"></script>
 </body>
 </html>
