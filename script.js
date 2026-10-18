@@ -45,7 +45,7 @@
 
     for (const coupon of entries) {
       if (!coupon || !coupon.used) continue;
-      if (coupon.redemption?.undoAudit && (coupon.redemption.amountKind === 'estimate' || coupon.redemption.actualPaidCents == null)) continue;
+      if (coupon.redemption?.undoAudit && (coupon.redemption.actualPaidCents === null || coupon.redemption.actualPaidCents === undefined || String(coupon.redemption.actualPaidCents).trim() === '')) continue;
       const member = String(coupon.member || '').trim();
       if (!member) continue;
       const redemption = coupon.redemption;
@@ -103,6 +103,42 @@
       totalCents: summaries.reduce((sum, row) => sum + row.totalCents, 0),
       hasUnrecorded: summaries.some(row => row.hasUnrecorded)
     };
+  }
+
+  // Display-only fallback: linked transactions only; isolation is per member and wallet.
+  function estimateMissingTransactionAmounts(couponEntries, startDate, endDate) {
+    const groups = new Map();
+    for (const coupon of redemptionEntries(couponEntries)) {
+      const r = coupon.redemption || {};
+      const transactionId = String(r.transactionId || '').trim();
+      if (!coupon.used || !transactionId || r.undoAudit) continue;
+      let date = String(r.date || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) && coupon.usedAt != null && Number.isFinite(Number(coupon.usedAt))) {
+        const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Macau', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(Number(coupon.usedAt))).map(x => [x.type, x.value]));
+        date = `${p.year}-${p.month}-${p.day}`;
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date) && ((startDate && date < startDate) || (endDate && date > endDate))) continue;
+      const key = JSON.stringify([coupon.member || '', coupon.payment || '', transactionId]);
+      if (!groups.has(key)) groups.set(key, { transactionId, member: coupon.member || '', payment: coupon.payment || '', date, rows: [] });
+      groups.get(key).rows.push(coupon);
+    }
+    const transactions = [];
+    for (const group of groups.values()) {
+      const govCents = group.rows.filter(c => c.type === 'gov').reduce((sum, c) => { const n = toCents(c.amount); return Number.isInteger(n) && n > 0 ? sum + n : sum; }, 0);
+      const actualState = field => {
+        const values = group.rows.map(c => c.redemption?.[field]);
+        const missing = v => v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+        if (values.some(v => !missing(v))) return 'present';
+        return 'missing';
+      };
+      const estimatedSpendCents = actualState('actualSpendCents') === 'missing' && govCents ? govCents * 3 : null;
+      const estimatedPaidCents = actualState('actualPaidCents') === 'missing' && govCents ? govCents * 2 : null;
+      if (estimatedSpendCents === null && estimatedPaidCents === null) continue;
+      transactions.push({ ...group, estimatedSpendCents, estimatedPaidCents });
+    }
+    const byMember = Object.create(null);
+    for (const t of transactions) { const m = byMember[t.member] || (byMember[t.member] = { spendCents: 0, paidCents: 0 }); m.spendCents += t.estimatedSpendCents || 0; m.paidCents += t.estimatedPaidCents || 0; }
+    return { transactions, byMember, totalSpendCents: transactions.reduce((n, t) => n + (t.estimatedSpendCents || 0), 0), totalPaidCents: transactions.reduce((n, t) => n + (t.estimatedPaidCents || 0), 0) };
   }
 
   function estimateUnusedGovernmentSpend(couponEntries) {
@@ -665,7 +701,7 @@
     };
   }
 
-  const api = { redemptionEntries, planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, estimateUnusedGovernmentSpend, filterWalletRedemptions, validateRedemptionThresholds, calculateWalletSpendScenarios };
+  const api = { redemptionEntries, planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, estimateMissingTransactionAmounts, estimateUnusedGovernmentSpend, filterWalletRedemptions, validateRedemptionThresholds, calculateWalletSpendScenarios };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.ConsumeCalc = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -1009,8 +1045,8 @@
         const transactions = recordedTransactions(records);
         let sum = 0, known = 0, missing = false;
         for (const t of transactions) {
-          if (t.undone && (t.redemption.amountKind === 'estimate' || t.rows.every(c => c.redemption?.actualSpendCents == null && c.redemption?.actualPaidCents == null))) continue;
           const values = t.rows.map(c => c.redemption?.[field]);
+          if (t.undone && values.every(v => v === null || v === undefined || (typeof v === 'string' && v.trim() === ''))) continue;
           const value = values[0];
           if (Number.isInteger(value) && value >= 0 && values.every(v => v === value)) { sum += value; known++; }
           else missing = true;
@@ -1019,6 +1055,19 @@
         return `${compact ? '' : 'MOP '}${formatMop(sum / CENTS)}${missing ? '＋未記錄' : ''}`;
       }
 
+      function transactionAmountLabel(t, field) {
+        const raw = t.rows.map(c => c.redemption?.[field]);
+        const valid = raw.filter(v => Number.isInteger(v) && v >= 0);
+        if (valid.length) return valid.every(v => v === valid[0]) ? `MOP ${formatMop(valid[0] / CENTS)}` : '實際金額不一致';
+        const missing = raw.every(v => v === null || v === undefined || (typeof v === 'string' && v.trim() === ''));
+        const estimate = !t.undone && missing ? ConsumeCalc.estimateMissingTransactionAmounts(t.rows).transactions[0] : null;
+        const value = estimate?.[field === 'actualSpendCents' ? 'estimatedSpendCents' : 'estimatedPaidCents'];
+        return Number.isInteger(value) ? `估算 MOP ${formatMop(value / CENTS)}` : '未記錄';
+      }
+      function transactionRecordMarkup(t) {
+        const { member, payment } = t; const r = t.redemption; const estimated = r.amountKind === 'estimate';
+        return `<div class="transaction-record"><span>交易記錄：支出 ${transactionAmountLabel(t, 'actualSpendCents')}／實付 ${transactionAmountLabel(t, 'actualPaidCents')}</span>${!t.undone ? '<small>估算為非實際金額，不計入已記錄金額。</small>' : ''}${t.undone ? `<strong class="restored-marker">${estimated ? '已復原（估算已取消）' : '已復原（保留金融紀錄）'}</strong>` : ''}${r.transactionId && t.undone && !estimated ? `<button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : ''}${r.transactionId && !t.undone ? `<div class="undo-transaction"><span><strong>${escapeHtml(member)}／${escapeHtml(payment)}</strong> · ${t.rows.map(c => `${escapeHtml(couponName(c))}（${escapeHtml(c.id)}）`).join('、')}</span><button type="button" class="text-button" data-undo-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">復原此筆核銷</button><small class="undo-warning">只改本網站紀錄，不會退回支付平台的券；平台已核銷請勿復原。</small></div><button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : !r.transactionId ? '<small>舊紀錄缺少交易識別，未推算金額</small>' : ''}</div>`;
+      }
       function renderDrawStates() {
         const all = Object.entries(coupons).map(([id, c]) => ({ ...c, id }));
         const expired = isWeekExpired(currentWeek);
@@ -1030,8 +1079,10 @@
         const highest = Math.max(0, ...rows.map(r => r.awarded));
         const total = { member: '全家合計', records: all, awarded: rows.reduce((n, r) => n + r.awarded, 0), minimum: rows.reduce((n, r) => n + r.minimum, 0) };
         const columns = [...rows, total];
+        const estimate = ConsumeCalc.estimateMissingTransactionAmounts(all, localDateKey(WEEKS.find(w => w.key === currentWeek).start), localDateKey(WEEKS.find(w => w.key === currentWeek).end));
+        const estimateFor = (member, field) => { const rows = estimate.transactions.filter(t => t.member === member); const values = rows.map(t => t[field === 'actualSpendCents' ? 'estimatedSpendCents' : 'estimatedPaidCents']).filter(Number.isInteger); return values.length ? formatMop(values.reduce((a, b) => a + b, 0) / CENTS) : '未記錄'; };
         const metric = (label, key, values) => `<tr data-metric="${key}"><th scope="row">${label}</th>${values.map((value, i) => `<td${i === 5 ? ' class="household-total"' : ''}>${escapeHtml(value)}</td>`).join('')}</tr>`;
-        $('memberCompare').innerHTML = `<table class="family-matrix"><caption class="sr-only">所選週，政府券、粗估及實際記錄比較，金額 MOP</caption><colgroup><col class="metric-col">${columns.map(() => '<col>').join('')}</colgroup><thead><tr><th scope="col">項目</th>${columns.map((r, i) => `<th scope="col"${i === 5 ? ' class="household-total"' : ''}>${r.member}${i < 5 && highest > 0 && r.awarded === highest ? '<small class="highest">最高</small>' : ''}</th>`).join('')}</tr></thead><tbody>${metric('政府電子券<br>抽中面額', 'awarded', columns.map(r => formatMop(r.awarded)))}${metric('粗估最低<br>購物額', 'minimum', columns.map(r => expired ? '已過期' : formatMop(r.minimum)))}${metric('已記錄<br>支出', 'spend', columns.map(r => recordedAmount(r.records, 'actualSpendCents', true)))}${metric('已記錄<br>實付', 'paid', columns.map(r => recordedAmount(r.records, 'actualPaidCents', true)))}</tbody></table>`;
+        $('memberCompare').innerHTML = `<table class="family-matrix"><caption class="sr-only">所選週，政府券、粗估及實際記錄比較，金額 MOP</caption><colgroup><col class="metric-col">${columns.map(() => '<col>').join('')}</colgroup><thead><tr><th scope="col">項目</th>${columns.map((r, i) => `<th scope="col"${i === 5 ? ' class="household-total"' : ''}>${r.member}${i < 5 && highest > 0 && r.awarded === highest ? '<small class="highest">最高</small>' : ''}</th>`).join('')}</tr></thead><tbody>${metric('政府電子券<br>抽中面額', 'awarded', columns.map(r => formatMop(r.awarded)))}${metric('粗估最低<br>購物額', 'minimum', columns.map(r => expired ? '已過期' : formatMop(r.minimum)))}${metric('已記錄<br>支出', 'spend', columns.map(r => recordedAmount(r.records, 'actualSpendCents', true)))}${metric('已記錄<br>實付', 'paid', columns.map(r => recordedAmount(r.records, 'actualPaidCents', true)))}${metric('估算支出<br>（非實際）', 'estimated-spend', [...rows.map(r => estimateFor(r.member, 'actualSpendCents')), formatMop(estimate.totalSpendCents / CENTS)])}${metric('估算自付<br>（非實際）', 'estimated-paid', [...rows.map(r => estimateFor(r.member, 'actualPaidCents')), formatMop(estimate.totalPaidCents / CENTS)])}</tbody></table>`;
         $('walletRedemptionCards').innerHTML = rows.map(({member, records}) => `<section class="member-wallet-section"><h3>${member}</h3>${WALLETS.filter(payment => walletConfig[member]?.[payment] || records.some(c => c.payment === payment)).map(payment => {
           const list = records.filter(c => c.payment === payment);
           const available = list.filter(c => !c.used && c.type !== 'zero');
@@ -1040,7 +1091,7 @@
           const open = expandedWallet === key;
           const panelId = `wallet-panel-${MEMBERS.indexOf(member)}-${WALLETS.indexOf(payment)}`;
           const txns = recordedTransactions(list);
-          return `<div class="flat-wallet"><button type="button" class="wallet-toggle" data-expand-wallet data-member="${member}" data-payment="${payment}" aria-expanded="${open}" aria-controls="${panelId}"><span>${payment}${!walletConfig[member]?.[payment] ? '（已停用）' : ''}</span><span>券額 ${formatMop(face)} <small>${!list.length ? '未登記' : expired ? '已到期' : `${available.length} 張未用`}</small></span><span aria-hidden="true">${open ? '−' : '＋'}</span></button><div id="${panelId}" class="wallet-expanded"${open ? '' : ' hidden'}><div class="flat-coupons">${list.length ? list.map(c => `<p>${escapeHtml(couponTypeName(c.type))} ${escapeHtml(couponName(c))} <strong>${c.used ? '已核銷' : expired ? '已過期' : '未使用'}</strong></p>`).join('') : '<p>本週尚未登記結果。</p>'}</div><p class="wallet-recorded">已記錄支出 ${recordedAmount(list, 'actualSpendCents')} · 已記錄實付 ${recordedAmount(list, 'actualPaidCents')}</p>${available.length && !expired ? `<div class="redemption-card"><span>只使用 ${member}／${payment} 的券</span><button class="button" type="button" data-wallet-redemption data-member="${member}" data-payment="${payment}">選擇用券並核對</button></div>` : ''}${txns.map(t => { const r = t.redemption; const estimated = r.amountKind === 'estimate'; return `<div class="transaction-record"><span>${estimated ? `估算：支出 MOP ${formatMop((r.estimatedSpendCents || 0) / CENTS)}／自付 MOP ${formatMop((r.estimatedPaidCents || 0) / CENTS)}` : `交易記錄：支出 ${recordedAmount(t.rows, 'actualSpendCents')}／實付 ${recordedAmount(t.rows, 'actualPaidCents')}`}</span>${t.undone ? `<strong class="restored-marker">${estimated ? '已復原（估算已取消）' : '已復原（保留金融紀錄）'}</strong>` : ''}${r.transactionId && t.undone && !estimated ? `<button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : ''}${r.transactionId && !t.undone ? `<div class="undo-transaction"><span><strong>${escapeHtml(member)}／${escapeHtml(payment)}</strong> · ${t.rows.map(c => `${escapeHtml(couponName(c))}（${escapeHtml(c.id)}）`).join('、')}</span><button type="button" class="text-button" data-undo-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">復原此筆核銷</button><small class="undo-warning">只改本網站紀錄，不會退回支付平台的券；平台已核銷請勿復原。</small></div><button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : !r.transactionId ? '<small>舊紀錄缺少交易識別，未推算金額</small>' : ''}</div>`; }).join('')}</div></div>`;
+          return `<div class="flat-wallet"><button type="button" class="wallet-toggle" data-expand-wallet data-member="${member}" data-payment="${payment}" aria-expanded="${open}" aria-controls="${panelId}"><span>${payment}${!walletConfig[member]?.[payment] ? '（已停用）' : ''}</span><span>券額 ${formatMop(face)} <small>${!list.length ? '未登記' : expired ? '已到期' : `${available.length} 張未用`}</small></span><span aria-hidden="true">${open ? '−' : '＋'}</span></button><div id="${panelId}" class="wallet-expanded"${open ? '' : ' hidden'}><div class="flat-coupons">${list.length ? list.map(c => `<p>${escapeHtml(couponTypeName(c.type))} ${escapeHtml(couponName(c))} <strong>${c.used ? '已核銷' : expired ? '已過期' : '未使用'}</strong></p>`).join('') : '<p>本週尚未登記結果。</p>'}</div><p class="wallet-recorded">已記錄支出 ${recordedAmount(list, 'actualSpendCents')} · 已記錄實付 ${recordedAmount(list, 'actualPaidCents')}</p>${available.length && !expired ? `<div class="redemption-card"><span>只使用 ${member}／${payment} 的券</span><button class="button" type="button" data-wallet-redemption data-member="${member}" data-payment="${payment}">選擇用券並核對</button></div>` : ''}${txns.map(transactionRecordMarkup).join('')}</div></div>`;
         }).join('') || '<p class="hint">尚未啟用支付方式</p>'}</section>`).join('');
       }
 
@@ -1274,6 +1325,7 @@
         const actualSpend = selectedWeek
           ? ConsumeCalc.summarizeActualSpend(Object.values(coupons), localDateKey(selectedWeek.start), localDateKey(selectedWeek.end))
           : { byMember: Object.create(null), totalCents: 0, hasUnrecorded: false };
+        const missingEstimates = selectedWeek ? ConsumeCalc.estimateMissingTransactionAmounts(Object.values(coupons), localDateKey(selectedWeek.start), localDateKey(selectedWeek.end)) : { byMember: Object.create(null), totalSpendCents: 0, totalPaidCents: 0 };
         const spendLabel = (totalCents, hasUnrecorded) => {
           const amountText = `MOP ${formatMop(totalCents / CENTS)}`;
           return hasUnrecorded ? (totalCents > 0 ? `${amountText} + 未記錄` : '未記錄') : amountText;
@@ -1285,7 +1337,7 @@
             return `<tr><th scope="row">${escapeHtml(member)}</th><td class="num">${spendLabel(spend?.totalCents || 0, Boolean(spend?.hasUnrecorded))}</td></tr>`;
           }).join('')}</tbody>
           <tfoot><tr><th scope="row">全家合計</th><td class="num">${spendLabel(actualSpend.totalCents, actualSpend.hasUnrecorded)}</td></tr></tfoot>
-        </table>`;
+        </table><p class="hint"><strong>非實際估算（不計入已記錄金額）</strong>：支出 MOP ${formatMop(missingEstimates.totalSpendCents / CENTS)} · 自付 MOP ${formatMop(missingEstimates.totalPaidCents / CENTS)}</p>`;
         const activeEntries = isWeekExpired(currentWeek) ? [] : entries;
         const unusedGovernment = activeEntries.filter(([, coupon]) => coupon.type === 'gov' && !coupon.used);
         const unusedAmount = unusedGovernment.reduce((sum, [, coupon]) => sum + coupon.amount, 0);
@@ -1329,17 +1381,24 @@
         $('couponList').innerHTML = [...groups.values()].map(group => `<section class="coupon-group">
           <div class="coupon-group-heading"><h3>${escapeHtml(group.member)}／${escapeHtml(group.payment)}</h3><button class="button secondary small" type="button" data-wallet-plan data-member="${escapeHtml(group.member)}" data-payment="${escapeHtml(group.payment)}" aria-label="只用${escapeHtml(group.member)}／${escapeHtml(group.payment)}試算">只試算此錢包</button></div>
           ${group.coupons.map(coupon => couponRow(coupon)).join('')}
+          ${vaultTransactionsMarkup(group)}
         </section>`).join('');
+      }
+
+      function vaultTransactionsMarkup(group) {
+        const visibleIds = new Set(group.coupons.map(c => c.id));
+        const transactions = recordedTransactions(walletRecords(group.member, group.payment))
+          .filter(t => t.rows.some(c => visibleIds.has(c.id)));
+        return transactions.length ? `<section class="vault-transactions" aria-label="${escapeHtml(group.member)}／${escapeHtml(group.payment)}核銷交易"><h4>核銷交易與復原</h4><p class="hint">同筆多張券會一併復原；請先核對下方券組。</p>${transactions.map(transactionRecordMarkup).join('')}</section>` : '';
       }
 
       function couponRedemptionSummary(coupon) {
         if (!coupon.used) return '';
-        const r = coupon.redemption;
-        if (!r) return '<div class="redemption-summary">實付金額未記錄（舊紀錄未保存）</div>';
-        if (r.amountKind === 'estimate') return `<div class="redemption-summary">估算（非實際）：支出 MOP ${formatMop((r.estimatedSpendCents || 0) / CENTS)}／自付 MOP ${formatMop((r.estimatedPaidCents || 0) / CENTS)}</div>`;
-        return `<div class="redemption-summary">核銷日期 ${escapeHtml(r.date)}；實付 ${Number.isInteger(r.actualPaidCents) ? `MOP ${formatMop(r.actualPaidCents / CENTS)}` : '未記錄'}</div>`;
+        const transactions = recordedTransactions(walletRecords(coupon.member, coupon.payment));
+        const t = transactions.find(group => group.rows.some(row => row.id === coupon.id));
+        if (!t) return '<div class="redemption-summary">實付金額未記錄（舊紀錄未保存）</div>';
+        return `<div class="redemption-summary">核銷日期 ${escapeHtml(t.redemption.date || '')}；支出 ${transactionAmountLabel(t, 'actualSpendCents')}／實付 ${transactionAmountLabel(t, 'actualPaidCents')}</div>`;
       }
-
       function couponRow(coupon) {
         const expired = !coupon.used && isWeekExpired(currentWeek);
         const status = coupon.used
@@ -2535,6 +2594,10 @@
       $('walletRedemptionMemberFilter').addEventListener('change', renderDrawStates);
       $('walletRedemptionPaymentFilter').addEventListener('change', renderDrawStates);
       $('couponList').addEventListener('click', event => {
+        const undo = event.target.closest('[data-undo-transaction]');
+        if (undo) { undoTransaction(undo.dataset.member, undo.dataset.payment, undo.dataset.undoTransaction); return; }
+        const correction = event.target.closest('[data-correct-transaction]');
+        if (correction) { openCorrection(correction.dataset.member, correction.dataset.payment, correction.dataset.correctTransaction); return; }
         const walletPlan = event.target.closest('[data-wallet-plan]');
         if (walletPlan) {
           selectedCalcMembers = [walletPlan.dataset.member];

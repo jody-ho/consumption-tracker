@@ -783,3 +783,10 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 }
 .undo-transaction { display: grid; gap: 5px; padding: 8px 10px; border-left: 3px solid var(--accent, #19594c); background: #f4f8f6; }
 .undo-warning { color: #7a3d16; font-size: .9em; }
+.vault-transactions { padding: 12px; background: #fbfdfb; border-top: 1px solid var(--line); min-width: 0; }
+.vault-transactions h4 { margin: 0 0 6px; font-size: 15px; }
+.vault-transactions .hint { margin: 0 0 8px; }
+.vault-transactions .transaction-record { overflow-wrap: anywhere; }
+.vault-transactions [data-undo-transaction] { min-height: 44px; font-weight: 700; }
+.undo-transaction { min-width: 0; overflow-wrap: anywhere; }
+.undo-warning { display: block; line-height: 1.5; }

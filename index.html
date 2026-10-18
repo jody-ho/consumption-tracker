@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#19594c">
-  <meta name="application-version" content="4.12.0">
+  <meta name="application-version" content="4.13.0">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.12.0">
+  <link rel="stylesheet" href="./style.css?v=4.13.0">
 </head>
 <body>
   <header class="hero">
@@ -52,12 +52,12 @@
     <section id="overview" class="panel active" aria-label="本週概覽">
       <section class="family-overview" aria-labelledby="matrixHeading">
         <div class="section-line"><h2 id="matrixHeading">全家本週比較 <small>金額 MOP</small></h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="matrixHelp">i 金額說明</button></div>
-        <div id="matrixHelp" class="help-copy" hidden>粗估最低購物額＝所選週尚未使用政府電子券面額 × 3，不含商戶券及禮遇券，不是實際支出或實付。已記錄金額只計實際交易，同筆多張券只計一次；缺少金額顯示「未記錄」。最高標示只比較政府券抽中面額，包含已用券。</div>
+        <div id="matrixHelp" class="help-copy" hidden>粗估最低購物額＝所選週尚未使用政府電子券面額 × 3，不含商戶券及禮遇券，不是實際支出或實付。已記錄金額只計實際交易，同筆多張券只計一次；缺少金額顯示「未記錄」。估算支出／自付另列且明確標示非實際，不計入已記錄總額。最高標示只比較政府券抽中面額，包含已用券。</div>
         <div id="memberCompare" aria-label="五位家人及全家合計金額比較"></div>
       </section>
       <section class="family-wallets" aria-labelledby="walletRedemptionHeading">
         <div class="section-line"><h2 id="walletRedemptionHeading">各人支付方式</h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="walletHelp">i 用券規則</button></div>
-        <p id="walletHelp" class="help-copy" hidden>展開不會核銷。只預選此錢包的未用政府券，商戶券預設不選，每筆最多一張、滿 MOP 100 減 12，先扣商戶券；政府券由大至小逐張核對剩餘額，每用一張扣去面額 × 3 再核對下一張。不可跨人、錢包或交易合併。沒有實際金額也可確認，會明確保存為估算；之後可更正同一筆。週期按澳門時間週五 00:00 至週四 23:59。</p>
+        <p id="walletHelp" class="help-copy" hidden>展開不會核銷。只預選此錢包的未用政府券，商戶券預設不選，每筆最多一張、滿 MOP 100 減 12，先扣商戶券；政府券由大至小逐張核對剩餘額，每用一張扣去面額 × 3 再核對下一張。不可跨人、錢包或交易合併。沒有實際金額也可確認，會明確保存為估算；估算依關聯政府券面額推算，只供參考、不計入實際總額；有實際金額的欄位優先顯示實際值，之後可更正同一筆。週期按澳門時間週五 00:00 至週四 23:59。</p>
         <div id="walletRedemptionCards" class="flat-wallets"></div>
       </section>
       <div hidden aria-hidden="true">
@@ -168,7 +168,7 @@
         <p class="lead">本週券已按家人與支付方式分組；可篩選狀態。</p>
         <section class="actual-spend-summary" aria-labelledby="actualSpendHeading">
           <h3 id="actualSpendHeading">本週實際自付（已記錄）</h3>
-          <p class="hint">只計核銷時記錄的實付；同一交易多張券只計一次。舊紀錄缺金額會顯示「未記錄」，不作推算。</p>
+          <p class="hint">只計核銷時記錄的實付；同一交易多張券只計一次。舊紀錄缺金額會顯示「未記錄」。另列的非實際估算只依明確連結交易的政府券面額計算：支出 3 倍、自付 2 倍；排除商戶券及禮遇券，不覆蓋實際值，且不計入已記錄合計。缺少交易識別的舊紀錄不推估。</p>
           <div id="actualSpendSummary" class="actual-spend-scroll" role="region" aria-label="按家庭成員及全家合計的本週實際自付" tabindex="0"></div>
         </section>
         <div id="stats" class="stats" aria-live="polite"></div>
@@ -225,7 +225,7 @@
       </details>
     </section>
 
-    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.12.0</small></footer>
+    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.13.0</small></footer>
   </main>
 
   <nav class="bottom-nav" aria-label="主要導覽">
@@ -279,6 +279,6 @@
     </form>
   </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=4.12.0"></script>
+  <script src="./script.js?v=4.13.0"></script>
 </body>
 </html>
