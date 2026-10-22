@@ -1,17 +1,17 @@
 :root {
   color-scheme: light;
-  --pine-950: #19594c;
-  --pine-900: #246d5d;
-  --pine-700: #347f6c;
-  --sage-600: #688f80;
-  --sage-200: #dce9e2;
-  --sage-100: #edf4ef;
-  --paper: #f5f8f5;
-  --paper-deep: #e8efea;
+  --pine-950: #18304d;
+  --pine-900: #234363;
+  --pine-700: #315b85;
+  --sage-600: #64788e;
+  --sage-200: #e4eaf2;
+  --sage-100: #f0f4f8;
+  --paper: #f5f7fa;
+  --paper-deep: #e9eef5;
   --card: #ffffff;
-  --ink: #20312d;
-  --muted: #5d6d67;
-  --line: #d8e2dc;
+  --ink: #1e293b;
+  --muted: #566579;
+  --line: #dce3ec;
   --amber: #f2c36b;
   --amber-soft: #fff5dc;
   --blue-soft: #edf0f6;
@@ -787,6 +787,88 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .vault-transactions h4 { margin: 0 0 6px; font-size: 15px; }
 .vault-transactions .hint { margin: 0 0 8px; }
 .vault-transactions .transaction-record { overflow-wrap: anywhere; }
+
+/* Daily workflow: clear money hierarchy and wallet cards. */
+.hero { background: #fff; color: var(--ink); border-radius: 0; border-bottom: 1px solid var(--line); box-shadow: none; }
+.hero::after,.brand-mark { display: none; }
+.hero h1 { color: var(--ink); }
+.hero p,.eyebrow { color: var(--muted); }
+.connection { border-color: var(--line); background: var(--sage-100); color: var(--pine-950); }
+.connection::before { background: #2d8a64; box-shadow: 0 0 0 3px #d9eee4; }
+.dashboard-sections { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 0 12px 14px; }
+.dashboard-block { min-width: 0; padding: 19px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.unused-block { background: #f1f6fc; border-color: #d9e7f7; }
+.used-block { background: #f9f7f3; border-color: #eae4d9; }
+.dashboard-block-head { display: flex; align-items: center; gap: 8px; }
+.dashboard-block h3 { margin: 0; font-size: 19px; }
+.dashboard-kicker,.priority-badge { padding: 3px 8px; border-radius: 99px; background: #e1eaf7; color: #274b71; font-size: 12px; font-weight: 800; }
+.used-block .dashboard-kicker { background: #efe7d9; color: #765833; }
+.dashboard-main { display: grid; gap: 2px; margin: 14px 0; }
+.dashboard-main span,.dashboard-pair span { color: var(--muted); font-size: 13px; }
+.dashboard-main strong { font-size: clamp(29px,3vw,39px); line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.dashboard-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.dashboard-pair p { display: grid; gap: 1px; margin: 0; padding: 9px 0; border-top: 1px solid var(--line); }
+.dashboard-pair strong { font-size: 18px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.dashboard-block small { display: block; margin-top: 8px; color: var(--muted); line-height: 1.5; }
+.missing-note { display: block; color: var(--danger); }
+.dashboard-empty { margin: 0 12px 14px; padding: 24px; text-align: center; }
+.dashboard-empty p { margin: 6px 0 14px; }
+.member-wallet-section { border-top: 1px solid var(--line); }
+.member-wallet-section:nth-child(1) { --member-accent: #5781ad; }
+.member-wallet-section:nth-child(2) { --member-accent: #ca849d; }
+.member-wallet-section:nth-child(3) { --member-accent: #5c9b7c; }
+.member-wallet-section:nth-child(4) { --member-accent: #ca9560; }
+.member-wallet-section:nth-child(5) { --member-accent: #8b7bb7; }
+.member-wallet-section .member-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-left: 5px solid var(--member-accent); background: #f8fafc; }
+.member-wallet-section > summary { min-height: 52px; cursor: pointer; list-style-position: inside; }
+.member-wallet-section > summary::marker { color: var(--pine-700); }
+.member-wallet-section .member-heading h3 { padding: 0; border: 0; background: transparent; font-size: 17px; }
+.member-heading span { color: var(--muted); font-size: 13px; text-align: right; }
+.wallet-toggle { grid-template-columns: minmax(0,1fr) minmax(0,1.5fr) 18px; gap: 12px; }
+.wallet-toggle span:nth-child(2) { text-align: right; font-weight: 750; font-variant-numeric: tabular-nums; }
+.wallet-toggle small { display: block; margin-left: 0; font-weight: 500; }
+.wallet-figures { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.wallet-figures p { display: grid; gap: 2px; margin: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.wallet-figures strong { font-size: 15px; overflow-wrap: anywhere; }
+.wallet-history { margin-top: 12px; }
+.wallet-history > summary,.transaction-actions > summary { min-height: 44px; padding: 10px 0; color: var(--pine-950); font-weight: 700; cursor: pointer; }
+.mode-switch { display: flex; gap: 8px; margin: 8px 0 16px; }
+.mode-switch .button { flex: 1; }
+#calcResults[hidden],#useCouponsResults[hidden],#shoppingAmountField[hidden],#firstSpendField[hidden],#calcSubmitRow[hidden] { display: none; }
+.use-coupon-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.use-coupon-card { display: grid; gap: 9px; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.use-coupon-head { display: flex; align-items: center; gap: 8px; }
+.use-coupon-head h4,.use-coupon-card p { margin: 0; }
+.use-coupon-card small { color: var(--muted); }
+.use-coupon-card .button { justify-self: start; }
+.plan-transaction-summary { display: grid; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
+.plan-transaction-summary li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #f7f9fc; }
+.plan-transaction-summary span { font-variant-numeric: tabular-nums; }
+.fun-stats:has(.draw-bars) { display: block; }
+.draw-bars { display: grid; gap: 9px; }
+.draw-bar-row { display: grid; grid-template-columns: 3.5em minmax(0,1fr) 6em auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.draw-bar-row > strong { font-variant-numeric: tabular-nums; text-align: right; }
+.draw-bar-track { height: 13px; border-radius: 99px; background: #e5ebf4; overflow: hidden; }
+.draw-bar-track i { display: block; height: 100%; border-radius: inherit; background: #6f95be; }
+.draw-bar-row:nth-child(2) .draw-bar-track i { background: #ca849d; }
+.draw-bar-row:nth-child(3) .draw-bar-track i { background: #5c9b7c; }
+.draw-bar-row:nth-child(4) .draw-bar-track i { background: #ca9560; }
+.draw-bar-row:nth-child(5) .draw-bar-track i { background: #8b7bb7; }
+.draw-bar-row details { grid-column: 1/-1; }
+.draw-bar-row details > summary { width: max-content; min-height: 36px; color: var(--pine-950); cursor: pointer; }
+.draw-bar-row details p { display: inline-block; margin: 2px 14px 2px 0; color: var(--muted); }
+@media (max-width: 620px) {
+  .dashboard-sections,.use-coupon-list { grid-template-columns: 1fr; }
+  .dashboard-block { padding: 15px; }
+  .member-wallet-section .member-heading { align-items: start; flex-direction: column; gap: 2px; }
+  .member-heading span { text-align: left; }
+  .wallet-figures { grid-template-columns: 1fr; }
+  .wallet-toggle { padding: 12px 8px; font-size: 14px; }
+  .wallet-toggle span:nth-child(2) { font-size: 13px; }
+  .mode-switch .button { padding-inline: 6px; font-size: 15px; }
+  .plan-transaction-summary li { display: grid; }
+  .draw-bar-row { grid-template-columns: 3em minmax(0,1fr) 5.5em; }
+}
 .vault-transactions [data-undo-transaction] { min-height: 44px; font-weight: 700; }
 .undo-transaction { min-width: 0; overflow-wrap: anywhere; }
 .undo-warning { display: block; line-height: 1.5; }

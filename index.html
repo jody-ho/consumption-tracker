@@ -19,7 +19,7 @@
         <div>
           <div class="eyebrow">2026 · 社區消費連環賞 · R2</div>
           <h1>家庭消費帳冊</h1>
-          <p>本週券額與用券記錄</p>
+          <p>消費前查看 · 消費時試算 · 消費後核銷</p>
         </div>
       </div>
       <span id="connection" class="connection" role="status">準備連線…</span>
@@ -51,13 +51,13 @@
 
     <section id="overview" class="panel active" aria-label="本週概覽">
       <section class="family-overview" aria-labelledby="matrixHeading">
-        <div class="section-line"><h2 id="matrixHeading">全家本週比較 <small>金額 MOP</small></h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="matrixHelp">i 金額說明</button></div>
-        <div id="matrixHelp" class="help-copy" hidden>粗估最低購物額＝所選週尚未使用政府電子券面額 × 3，不含商戶券及禮遇券，不是實際支出或實付。已記錄金額只計實際交易，同筆多張券只計一次；缺少金額顯示「未記錄」。估算支出／自付另列且明確標示非實際，不計入已記錄總額。最高標示只比較政府券抽中面額，包含已用券。</div>
+        <div class="section-line"><h2 id="matrixHeading">本週消費總覽</h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="matrixHelp">金額說明</button></div>
+        <div id="matrixHelp" class="help-copy" hidden>未使用區只計尚有效的政府電子券：最低購物額參考為券面額 × 3，預計自付為此參考額減券面額。商戶券、禮遇券及其他優惠不混算。已使用區只計有完整實際支出與實付的交易，同筆多券只計一次；缺漏會另外提示。</div>
         <div id="memberCompare" aria-label="五位家人及全家合計金額比較"></div>
       </section>
       <section class="family-wallets" aria-labelledby="walletRedemptionHeading">
-        <div class="section-line"><h2 id="walletRedemptionHeading">各人支付方式</h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="walletHelp">i 用券規則</button></div>
-        <p id="walletHelp" class="help-copy" hidden>展開不會核銷。只預選此錢包的未用政府券，商戶券預設不選，每筆最多一張、滿 MOP 100 減 12，先扣商戶券；政府券由大至小逐張核對剩餘額，每用一張扣去面額 × 3 再核對下一張。不可跨人、錢包或交易合併。沒有實際金額也可確認，會明確保存為估算；估算依關聯政府券面額推算，只供參考、不計入實際總額；有實際金額的欄位優先顯示實際值，之後可更正同一筆。週期按澳門時間週五 00:00 至週四 23:59。</p>
+        <div class="section-line"><h2 id="walletRedemptionHeading">家人與錢包</h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="walletHelp">用券規則</button></div>
+        <p id="walletHelp" class="help-copy" hidden>每筆商戶券最多一張、優惠前消費滿 MOP 100；先扣商戶／其他優惠，再按政府券面額由大至小逐張核對三倍門檻。核銷需核對真實交易日期、支出及實付；本頁不會直接扣券。週期按澳門時間週五至週四。</p>
         <div id="walletRedemptionCards" class="flat-wallets"></div>
       </section>
       <div hidden aria-hidden="true">
@@ -70,15 +70,16 @@
 
     <section id="calc" class="panel" aria-label="試算">
       <article class="card">
-        <h2>家庭分單試算</h2>
-        <p class="lead">輸入優惠前消費總額與已先消費金額，按一次查看最低自付方案；券按家人及支付方式分開核算。試算不含其他支付優惠、禮遇券或 MOP 500 卡式優惠。</p>
+        <h2>消費試算</h2>
+        <div class="mode-switch" role="group" aria-label="試算模式"><button id="modeShopping" class="button" type="button" aria-pressed="true">我要買東西</button><button id="modeUseCoupons" class="button secondary" type="button" aria-pressed="false">我要盡量用券</button></div>
+        <p id="calcModeIntro" class="lead">輸入優惠前消費總額，查看分單後的預計實付。試算不含其他支付優惠、禮遇券或 MOP 500 卡式優惠。</p>
         <form id="calcForm" novalidate>
           <div class="grid">
-            <div class="field">
+            <div id="shoppingAmountField" class="field">
               <label for="totalSpend">計劃消費總額（優惠前，MOP）</label>
               <input id="totalSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" placeholder="例如 181">
             </div>
-            <div class="field">
+            <div id="firstSpendField" class="field">
               <label for="firstSpend">已先消費／抽獎首單金額（MOP）</label>
               <input id="firstSpend" class="control" type="number" min="0" step="0.01" inputmode="decimal" value="0">
               <div class="hint">預設 0；若已先消費（例如 MOP 50），填入已花金額。這筆金額會從剩餘預算扣除，不需指定家人或支付方式。</div>
@@ -127,11 +128,12 @@
               </details>
             </div>
           </div>
-          <div class="calc-submit-row">
+          <div id="calcSubmitRow" class="calc-submit-row">
             <button class="button" type="submit">計算用券方案</button>
             <span class="hint">更改金額或條件後，請再次計算以更新結果。</span>
           </div>
         </form>
+        <section id="useCouponsResults" class="calc-results" aria-label="盡量用券的錢包建議" hidden></section>
         <section id="calcResults" class="calc-results" aria-label="用券試算結果">
           <h3 class="section-heading">計算結果</h3>
           <div id="planSummary" class="notice neutral" aria-live="polite">填入計劃總消費額，再按「計算用券方案」。</div>
@@ -173,9 +175,9 @@
         </section>
         <div id="stats" class="stats" aria-live="polite"></div>
         <details class="weekly-details fun-details">
-          <summary>查看家庭趣味統計</summary>
+          <summary>抽券比較</summary>
           <div class="fun-toolbar">
-            <h3>趣味統計</h3>
+            <h3>政府電子券抽中面額</h3>
             <label for="statMode">統計期間</label>
             <select id="statMode" class="control" aria-label="趣味統計期間">
               <option value="week">本週</option>
@@ -229,10 +231,10 @@
   </main>
 
   <nav class="bottom-nav" aria-label="主要導覽">
-    <button class="button secondary" data-nav="overview" type="button" aria-current="page">本週</button>
+    <button class="button secondary" data-nav="overview" type="button" aria-current="page">首頁</button>
     <button class="button secondary" data-nav="calc" type="button">試算</button>
-    <button class="button secondary" data-nav="record" type="button">登記三券</button>
-    <button class="button secondary" data-nav="home" type="button">家庭券庫</button>
+    <button class="button secondary" data-nav="record" type="button">登記</button>
+    <button class="button secondary" data-nav="home" type="button">券庫</button>
   </nav>
   <dialog id="redeemDialog" class="redeem-dialog" aria-labelledby="redeemDialogTitle">
     <form id="redeemForm" novalidate>

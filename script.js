@@ -157,6 +157,74 @@
     };
   }
 
+  function macauDateKey(date = new Date()) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Macau', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(date).map(part => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+
+  // A single display selector keeps the household, member and wallet totals in sync.
+  // Unknown legacy transaction grouping is reported as incomplete instead of guessing money.
+  function summarizeDashboard(couponEntries, startDate, endDate, expired = false) {
+    const entries = Array.isArray(couponEntries) ? couponEntries : Object.entries(couponEntries || {}).map(([id, row]) => ({ ...row, id }));
+    const empty = () => ({ unusedGovernmentCents: 0, minimumSpendCents: 0, estimatedPayCents: 0,
+      actualSpendCents: 0, actualPaidCents: 0, discountCents: 0, hasMissingActual: false, recordedTransactions: 0 });
+    const result = { ...empty(), byMember: Object.create(null), byWallet: Object.create(null), hasResults: entries.length > 0 };
+    const transactions = new Map();
+    const rowFor = coupon => {
+      const member = String(coupon.member || '').trim();
+      const payment = String(coupon.payment || '').trim();
+      if (!member || !payment) return null;
+      if (!result.byMember[member]) result.byMember[member] = empty();
+      const walletKey = `${member}|${payment}`;
+      if (!result.byWallet[walletKey]) result.byWallet[walletKey] = { ...empty(), member, payment };
+      return [result, result.byMember[member], result.byWallet[walletKey]];
+    };
+    const add = (rows, field, value) => rows.forEach(row => { row[field] += value; });
+    const missing = rows => rows.forEach(row => { row.hasMissingActual = true; });
+    for (const [index, coupon] of entries.entries()) {
+      if (!coupon) continue;
+      const rows = rowFor(coupon);
+      if (!rows) continue;
+      if (!expired && !coupon.used && coupon.type === 'gov' && GOV_DENOMINATIONS.has(Number(coupon.amount))) {
+        const value = toCents(coupon.amount);
+        add(rows, 'unusedGovernmentCents', value);
+        add(rows, 'minimumSpendCents', value * 3);
+        add(rows, 'estimatedPayCents', value * 2);
+      }
+      if (!coupon.used || coupon.redemption?.undoAudit) continue;
+      const redemption = coupon.redemption || {};
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(redemption.date || '') ? redemption.date
+        : Number.isFinite(Number(coupon.usedAt)) && coupon.usedAt != null ? macauDateKey(new Date(Number(coupon.usedAt))) : '';
+      if (date && (date < startDate || date > endDate)) continue;
+      if (!date) { missing(rows); continue; }
+      const transactionId = String(redemption.transactionId || '').trim();
+      const usedAt = coupon.usedAt != null && Number.isFinite(Number(coupon.usedAt)) ? String(Number(coupon.usedAt)) : '';
+      const key = transactionId ? `id:${coupon.member}|${coupon.payment}|${transactionId}`
+        : usedAt ? `legacy:${coupon.member}|${coupon.payment}|${usedAt}` : '';
+      if (!key) { missing(rows); continue; }
+      if (!transactions.has(key)) transactions.set(key, { rows, redemptions: [], index });
+      transactions.get(key).redemptions.push(redemption);
+    }
+    const amount = (redemptions, field) => {
+      const values = redemptions.map(r => r[field]);
+      if (values.some(v => v === null || v === undefined || String(v).trim() === '')) return null;
+      const numbers = values.map(Number);
+      return numbers.every(v => Number.isInteger(v) && v >= 0 && v === numbers[0]) ? numbers[0] : null;
+    };
+    for (const { rows, redemptions } of transactions.values()) {
+      const spend = amount(redemptions, 'actualSpendCents');
+      const paid = amount(redemptions, 'actualPaidCents');
+      if (spend === null || paid === null || paid > spend) { missing(rows); continue; }
+      add(rows, 'actualSpendCents', spend);
+      add(rows, 'actualPaidCents', paid);
+      add(rows, 'discountCents', spend - paid);
+      add(rows, 'recordedTransactions', 1);
+    }
+    return result;
+  }
+
   function filterWalletRedemptions(walletRedemptions, member = 'all', payment = 'all') {
     const rows = Array.isArray(walletRedemptions) ? walletRedemptions : [];
     return rows.filter(wallet => wallet &&
@@ -701,7 +769,7 @@
     };
   }
 
-  const api = { redemptionEntries, planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, estimateMissingTransactionAmounts, estimateUnusedGovernmentSpend, filterWalletRedemptions, validateRedemptionThresholds, calculateWalletSpendScenarios };
+  const api = { redemptionEntries, planHousehold, optimizeRemaining, groupChoices, nextGovernmentCoupon, nextMerchantCoupon, summarizeActualSpend, summarizeDashboard, macauDateKey, estimateMissingTransactionAmounts, estimateUnusedGovernmentSpend, filterWalletRedemptions, validateRedemptionThresholds, calculateWalletSpendScenarios };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.ConsumeCalc = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -721,8 +789,10 @@
       const WALLETS = ['MPay', '中銀', '工銀', '大豐', '國際', '支付寶', 'UEPay', '廣發'];
       const RESULT_TYPES = ['gov', 'zero', 'merchant', 'gift'];
       const GOV_AMOUNTS = [10, 20, 50, 100, 200];
-      const CAMPAIGN_START = new Date(2026, 9, 9, 12);
-      const CAMPAIGN_END = new Date(2026, 11, 17, 12);
+      // UTC calendar anchors are paired with Macau's current date key, so a
+      // visitor's device time zone cannot change week boundaries.
+      const CAMPAIGN_START = new Date(Date.UTC(2026, 9, 9, 12));
+      const CAMPAIGN_END = new Date(Date.UTC(2026, 11, 17, 12));
       const DEFAULT_WALLETS = {
         爸爸: { MPay: true },
         媽媽: { MPay: true, 中銀: true, 工銀: true, 大豐: true, 國際: true },
@@ -735,17 +805,17 @@
         let start = new Date(CAMPAIGN_START);
         while (start <= CAMPAIGN_END) {
           const end = new Date(start);
-          end.setDate(end.getDate() + 6);
+          end.setUTCDate(end.getUTCDate() + 6);
           if (end > CAMPAIGN_END) end.setTime(CAMPAIGN_END.getTime());
           const index = weeks.length;
           weeks.push({
             key: `2026R2-W${index + 1}`,
             start,
             end,
-            label: `第 ${index + 1} 週（${start.getMonth() + 1}/${start.getDate()}–${end.getMonth() + 1}/${end.getDate()}）`
+            label: `第 ${index + 1} 週（${start.getUTCMonth() + 1}/${start.getUTCDate()}–${end.getUTCMonth() + 1}/${end.getUTCDate()}）`
           });
           start = new Date(start);
-          start.setDate(start.getDate() + 7);
+          start.setUTCDate(start.getUTCDate() + 7);
         }
         return weeks;
       })();
@@ -762,7 +832,7 @@
         const amount = Math.round((Number(value) + Number.EPSILON) * 100) / 100;
         return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(amount);
       };
-      const localDateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const localDateKey = date => date.toISOString().slice(0, 10);
 
       let database = null;
       let weekReference = null;
@@ -773,6 +843,7 @@
       let coupons = Object.create(null);
       let pendingRedemption = null;
       let expandedWallet = null;
+      const expandedMembers = new Set(['爸爸']);
       let pendingCorrection = null;
       const undoingTransactions = new Set();
       let pendingWalletRedemption = null;
@@ -792,6 +863,7 @@
       let allPeriodRequestId = 0;
       let lastCalculatedPlan = null;
       let hasCalculatedResult = false;
+      let calcMode = 'shopping';
       const cacheKey = 'macau-consume-2026r2-household';
       const settingsPath = 'campaigns/2026R2/settings/wallets';
       const weekPath = () => `campaigns/2026R2/weeks/${currentWeek}`;
@@ -1067,34 +1139,53 @@
       function transactionRecordMarkup(t) {
         const { member, payment } = t; const r = t.redemption; const estimated = r.amountKind === 'estimate';
         const validTransactionId = typeof r.transactionId === 'string' && Boolean(r.transactionId.trim());
-        const canUndo = validTransactionId && !t.undone && t.rows.every(c => coupons[c.id]?.used && coupons[c.id]?.redemption?.transactionId === r.transactionId);
-        return `<div class="transaction-record"><span>交易記錄：支出 ${transactionAmountLabel(t, 'actualSpendCents')}／實付 ${transactionAmountLabel(t, 'actualPaidCents')}</span>${!t.undone ? '<small>估算為非實際金額，不計入已記錄金額。</small>' : ''}${t.undone ? `<strong class="restored-marker">${estimated ? '已復原（估算已取消）' : '已復原（保留金融紀錄）'}</strong>` : ''}${validTransactionId && t.undone && !estimated ? `<button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : ''}${canUndo ? `<div class="undo-transaction"><span><strong>${escapeHtml(member)}／${escapeHtml(payment)}</strong> · ${t.rows.map(c => `${escapeHtml(couponName(c))}（${escapeHtml(c.id)}）`).join('、')}</span><small class="undo-warning">將刪除此筆在本網站的核銷及支出／實付記錄（含估算），只將這筆交易的券還原為未使用；不會撤銷支付平台核銷、退券或退款，平台已核銷請勿復原。</small><button type="button" class="text-button" data-undo-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">復原並刪除此筆核銷記錄</button></div><button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${member}" data-payment="${payment}">更正實際金額</button>` : !validTransactionId ? '<small>舊紀錄缺少交易識別，未推算金額</small>' : ''}</div>`;
+        const canUndo = !isWeekExpired(currentWeek) && validTransactionId && !t.undone && t.rows.every(c => coupons[c.id]?.used && coupons[c.id]?.redemption?.transactionId === r.transactionId);
+        return `<div class="transaction-record"><span>交易記錄：支出 ${transactionAmountLabel(t, 'actualSpendCents')}／實付 ${transactionAmountLabel(t, 'actualPaidCents')}</span>${!t.undone ? '<small>估算為非實際金額，不計入已記錄金額。</small>' : ''}${t.undone ? `<strong class="restored-marker">${estimated ? '已復原（估算已取消）' : '已復原（保留金融紀錄）'}</strong>` : ''}${!isWeekExpired(currentWeek) && validTransactionId && t.undone && !estimated ? `<button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">更正實際金額</button>` : ''}${canUndo ? `<details class="transaction-actions"><summary>復原或更正此筆交易</summary><div class="undo-transaction"><span><strong>${escapeHtml(member)}／${escapeHtml(payment)}</strong> · ${t.rows.map(c => escapeHtml(couponName(c))).join('、')}</span><small class="undo-warning">網頁復原不等於支付平台退券或退款；請先核對平台紀錄。</small><button type="button" class="text-button" data-undo-transaction="${escapeHtml(r.transactionId)}" data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">復原並刪除此筆核銷記錄</button></div><button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">更正實際金額</button></details>` : !validTransactionId ? '<small>舊紀錄缺少交易識別，未推算金額</small>' : ''}</div>`;
       }
       function renderDrawStates() {
-        const all = Object.entries(coupons).map(([id, c]) => ({ ...c, id }));
+        const all = Object.entries(coupons).map(([id, coupon]) => ({ ...coupon, id }));
+        const week = WEEKS.find(item => item.key === currentWeek);
         const expired = isWeekExpired(currentWeek);
-        const rows = MEMBERS.map(member => {
-          const records = all.filter(c => c.member === member);
-          const gov = records.filter(c => c.type === 'gov');
-          return { member, records, awarded: gov.reduce((n, c) => n + c.amount, 0), minimum: gov.filter(c => !c.used).reduce((n, c) => n + c.amount * 3, 0) };
-        });
-        const highest = Math.max(0, ...rows.map(r => r.awarded));
-        const total = { member: '全家合計', records: all, awarded: rows.reduce((n, r) => n + r.awarded, 0), minimum: rows.reduce((n, r) => n + r.minimum, 0) };
-        const columns = [...rows, total];
-        const estimate = ConsumeCalc.estimateMissingTransactionAmounts(all, localDateKey(WEEKS.find(w => w.key === currentWeek).start), localDateKey(WEEKS.find(w => w.key === currentWeek).end));
-        const estimateFor = (member, field) => { const rows = estimate.transactions.filter(t => t.member === member); const values = rows.map(t => t[field === 'actualSpendCents' ? 'estimatedSpendCents' : 'estimatedPaidCents']).filter(Number.isInteger); return values.length ? formatMop(values.reduce((a, b) => a + b, 0) / CENTS) : '未記錄'; };
-        const metric = (label, key, values) => `<tr data-metric="${key}"><th scope="row">${label}</th>${values.map((value, i) => `<td${i === 5 ? ' class="household-total"' : ''}>${escapeHtml(value)}</td>`).join('')}</tr>`;
-        $('memberCompare').innerHTML = `<table class="family-matrix"><caption class="sr-only">所選週，政府券、粗估及實際記錄比較，金額 MOP</caption><colgroup><col class="metric-col">${columns.map(() => '<col>').join('')}</colgroup><thead><tr><th scope="col">項目</th>${columns.map((r, i) => `<th scope="col"${i === 5 ? ' class="household-total"' : ''}>${r.member}${i < 5 && highest > 0 && r.awarded === highest ? '<small class="highest">最高</small>' : ''}</th>`).join('')}</tr></thead><tbody>${metric('政府電子券<br>抽中面額', 'awarded', columns.map(r => formatMop(r.awarded)))}${metric('粗估最低<br>購物額', 'minimum', columns.map(r => expired ? '已過期' : formatMop(r.minimum)))}${metric('已記錄<br>支出', 'spend', columns.map(r => recordedAmount(r.records, 'actualSpendCents', true)))}${metric('已記錄<br>實付', 'paid', columns.map(r => recordedAmount(r.records, 'actualPaidCents', true)))}${metric('估算支出<br>（非實際）', 'estimated-spend', [...rows.map(r => estimateFor(r.member, 'actualSpendCents')), formatMop(estimate.totalSpendCents / CENTS)])}${metric('估算自付<br>（非實際）', 'estimated-paid', [...rows.map(r => estimateFor(r.member, 'actualPaidCents')), formatMop(estimate.totalPaidCents / CENTS)])}</tbody></table>`;
-        $('walletRedemptionCards').innerHTML = rows.map(({member, records}) => `<section class="member-wallet-section"><h3>${member}</h3>${WALLETS.filter(payment => walletConfig[member]?.[payment] || records.some(c => c.payment === payment)).map(payment => {
-          const list = records.filter(c => c.payment === payment);
-          const available = list.filter(c => !c.used && c.type !== 'zero');
-          const face = list.filter(c => c.type === 'gov').reduce((n, c) => n + c.amount, 0);
-          const key = `${member}|${payment}`;
-          const open = expandedWallet === key;
-          const panelId = `wallet-panel-${MEMBERS.indexOf(member)}-${WALLETS.indexOf(payment)}`;
-          const txns = recordedTransactions(list);
-          return `<div class="flat-wallet"><button type="button" class="wallet-toggle" data-expand-wallet data-member="${member}" data-payment="${payment}" aria-expanded="${open}" aria-controls="${panelId}"><span>${payment}${!walletConfig[member]?.[payment] ? '（已停用）' : ''}</span><span>券額 ${formatMop(face)} <small>${!list.length ? '未登記' : expired ? '已到期' : `${available.length} 張未用`}</small></span><span aria-hidden="true">${open ? '−' : '＋'}</span></button><div id="${panelId}" class="wallet-expanded"${open ? '' : ' hidden'}><div class="flat-coupons">${list.length ? list.map(c => `<p>${escapeHtml(couponTypeName(c.type))} ${escapeHtml(couponName(c))} <strong>${c.used ? '已核銷' : expired ? '已過期' : '未使用'}</strong></p>`).join('') : '<p>本週尚未登記結果。</p>'}</div><p class="wallet-recorded">已記錄支出 ${recordedAmount(list, 'actualSpendCents')} · 已記錄實付 ${recordedAmount(list, 'actualPaidCents')}</p>${available.length && !expired ? `<div class="redemption-card"><span>只使用 ${member}／${payment} 的券</span><button class="button" type="button" data-wallet-redemption data-member="${member}" data-payment="${payment}">選擇用券並核對</button></div>` : ''}${txns.map(transactionRecordMarkup).join('')}</div></div>`;
-        }).join('') || '<p class="hint">尚未啟用支付方式</p>'}</section>`).join('');
+        const summary = ConsumeCalc.summarizeDashboard(all, localDateKey(week.start), localDateKey(week.end), expired);
+        const money = cents => `MOP ${formatMop(cents / CENTS)}`;
+        const actual = (row, field) => `${money(row[field])}${row.hasMissingActual ? ' · 部分交易未記錄' : ''}`;
+        $('memberCompare').innerHTML = !summary.hasResults
+          ? `<div class="empty dashboard-empty"><strong>本週尚無登記結果</strong><p>登記完整三次抽獎結果後，可在此查看待用券與實際消費。</p><button class="button" type="button" data-open-registration>前往登記</button></div>`
+          : `<div class="dashboard-sections">
+              <section class="dashboard-block unused-block" aria-label="未使用的券">
+                <div class="dashboard-block-head"><span class="dashboard-kicker">消費前</span><h3>未使用的券</h3></div>
+                <p class="dashboard-main"><span>政府電子券面額</span><strong>${money(summary.unusedGovernmentCents)}</strong></p>
+                <div class="dashboard-pair"><p><span>最低購物額參考</span><strong>${money(summary.minimumSpendCents)}</strong></p><p><span>預計自付</span><strong>${money(summary.estimatedPayCents)}</strong></p></div>
+                <small>估算 · 僅計仍有效的政府券，購物額按面額 × 3；商戶券及禮遇券另計。</small>
+              </section>
+              <section class="dashboard-block used-block" aria-label="已使用的券">
+                <div class="dashboard-block-head"><span class="dashboard-kicker">消費後</span><h3>已使用的券</h3></div>
+                <p class="dashboard-main"><span>已記錄實際自付</span><strong>${money(summary.actualPaidCents)}</strong></p>
+                <div class="dashboard-pair"><p><span>已記錄實際支出</span><strong>${money(summary.actualSpendCents)}</strong></p><p><span>已知交易折扣</span><strong>${money(summary.discountCents)}</strong></p></div>
+                <small>實際記錄 · 同筆多券只計一次。${summary.hasMissingActual ? '<strong class="missing-note">部分交易未記錄金額，以上合計並非全部支出。</strong>' : ''}</small>
+              </section>
+            </div>`;
+        $('walletRedemptionCards').innerHTML = MEMBERS.map(member => {
+          const records = all.filter(coupon => coupon.member === member);
+          const memberSummary = summary.byMember[member] || { unusedGovernmentCents: 0, actualPaidCents: 0, hasMissingActual: false };
+          const wallets = WALLETS.filter(payment => walletConfig[member]?.[payment] || records.some(coupon => coupon.payment === payment));
+          return `<details class="member-wallet-section" data-member-group="${escapeHtml(member)}"${expandedMembers.has(member) ? ' open' : ''}><summary class="member-heading"><h3>${escapeHtml(member)}</h3><span>待用 ${money(memberSummary.unusedGovernmentCents)} · 已付 ${actual(memberSummary, 'actualPaidCents')}</span></summary>${wallets.map(payment => {
+            const list = records.filter(coupon => coupon.payment === payment);
+            const row = summary.byWallet[`${member}|${payment}`] || { unusedGovernmentCents: 0, minimumSpendCents: 0, estimatedPayCents: 0, actualPaidCents: 0, hasMissingActual: false };
+            const available = list.filter(coupon => !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type));
+            const key = `${member}|${payment}`;
+            const open = expandedWallet === key;
+            const panelId = `wallet-panel-${MEMBERS.indexOf(member)}-${WALLETS.indexOf(payment)}`;
+            const status = !list.length ? '未登記' : list.length < 3 ? `不完整 · ${list.length} 項` : list.length > 3 ? `歷史異常 · ${list.length} 項` : expired ? '已到期' : `${available.length} 張未用`;
+            const txns = recordedTransactions(list);
+            return `<div class="flat-wallet"><button type="button" class="wallet-toggle" data-expand-wallet data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}" aria-expanded="${open}" aria-controls="${panelId}"><span><strong>${escapeHtml(payment)}</strong> <small>${status}</small></span><span>待用 ${money(row.unusedGovernmentCents)}<small>已付 ${actual(row, 'actualPaidCents')}</small></span><span aria-hidden="true">${open ? '−' : '＋'}</span></button><div id="${panelId}" class="wallet-expanded"${open ? '' : ' hidden'}><div class="wallet-figures"><p>最低購物額參考 <strong>${money(row.minimumSpendCents)}</strong></p><p>預計自付 <strong>${money(row.estimatedPayCents)}</strong></p><p>已記錄實際自付 <strong>${actual(row, 'actualPaidCents')}</strong></p></div><div class="flat-coupons">${list.length ? list.map(coupon => `<p>${escapeHtml(couponTypeName(coupon.type))} ${escapeHtml(couponName(coupon))} <strong>${coupon.used ? '已核銷' : expired ? '已過期' : '未使用'}</strong></p>`).join('') : '<p>本週尚未登記結果。</p>'}</div>${available.length && !expired ? `<div class="redemption-card"><span>核對這筆實際交易後儲存</span><button class="button" type="button" data-wallet-redemption data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">快速核銷</button></div>` : ''}${txns.length ? `<details class="wallet-history"><summary>交易記錄與更正</summary>${txns.map(transactionRecordMarkup).join('')}</details>` : ''}</div></div>`;
+          }).join('') || '<p class="hint">尚未啟用支付方式</p>'}</details>`;
+        }).join('');
+        $('walletRedemptionCards').querySelectorAll('[data-member-group]').forEach(node => node.addEventListener('toggle', () => {
+          if (!node.isConnected) return;
+          if (node.open) expandedMembers.add(node.dataset.memberGroup);
+          else expandedMembers.delete(node.dataset.memberGroup);
+        }));
       }
 
       function resultPill(coupon) {
@@ -1243,7 +1334,7 @@
           ? allPeriodData
           : { [currentWeek]: { coupons: sanitizeCoupons(coupons) } };
         const memberTotals = Object.fromEntries(MEMBERS.map(member => [member, { amount: 0, merchant: 0, gift: 0, count: 0 }]));
-        const walletTotals = Object.fromEntries(WALLETS.map(wallet => [wallet, { amount: 0, count: 0 }]));
+        const memberWalletTotals = Object.fromEntries(MEMBERS.map(member => [member, Object.fromEntries(WALLETS.map(wallet => [wallet, 0]))]));
         let merchantTotal = 0;
         let giftTotal = 0;
         for (const weekData of Object.values(periodData || {})) {
@@ -1254,8 +1345,7 @@
             if (coupon.type === 'gov') {
               member.amount += coupon.amount;
               if (WALLETS.includes(coupon.payment)) {
-                walletTotals[coupon.payment].amount += coupon.amount;
-                walletTotals[coupon.payment].count++;
+                memberWalletTotals[coupon.member][coupon.payment] += coupon.amount;
               }
             } else if (coupon.type === 'merchant') {
               member.merchant++;
@@ -1266,21 +1356,19 @@
             }
           }
         }
-        const bestMember = MEMBERS.map(member => ({ name: member, ...memberTotals[member] }))
-          .filter(row => row.amount > 0).sort((a, b) => b.amount - a.amount || MEMBERS.indexOf(a.name) - MEMBERS.indexOf(b.name))[0];
-        const bestWallet = WALLETS.map(wallet => ({ name: wallet, ...walletTotals[wallet] }))
-          .filter(row => row.amount > 0).sort((a, b) => b.amount - a.amount || WALLETS.indexOf(a.name) - WALLETS.indexOf(b.name))[0];
-        $('funStats').innerHTML = [
-          `<div class="stat"><strong>${bestMember ? `${escapeHtml(bestMember.name)} · MOP ${formatMop(bestMember.amount)}` : '尚無電子優惠'}</strong><span>手氣王${bestMember ? ` · 商戶券 ${bestMember.merchant} 張／禮遇券 ${bestMember.gift} 張` : ''}</span></div>`,
-          `<div class="stat"><strong>${bestWallet ? `${escapeHtml(bestWallet.name)} · MOP ${formatMop(bestWallet.amount)}` : '尚無電子優惠'}</strong><span>最強平台 · 按電子優惠面值加總</span></div>`,
-          `<div class="stat"><strong>商戶 ${merchantTotal} 張 · 禮遇 ${giftTotal} 張</strong><span>${mode === 'all' ? '全期非現金獎券' : '本週非現金獎券'}</span></div>`
-        ].join('');
+        const maxAmount = Math.max(1, ...MEMBERS.map(member => memberTotals[member].amount));
+        $('funStats').innerHTML = `<div class="draw-bars" role="list" aria-label="五位家人的政府電子券抽中面額比較">${MEMBERS.map(member => {
+          const amount = memberTotals[member].amount;
+          const width = Math.round(amount / maxAmount * 100);
+          const wallets = WALLETS.filter(wallet => memberWalletTotals[member][wallet] > 0);
+          return `<div class="draw-bar-row" role="listitem"><span>${escapeHtml(member)}</span><div class="draw-bar-track"><i style="width:${width}%"></i></div><strong>MOP ${formatMop(amount)}</strong><details><summary>支付方式</summary>${wallets.length ? wallets.map(wallet => `<p>${escapeHtml(wallet)} · MOP ${formatMop(memberWalletTotals[member][wallet])}</p>`).join('') : '<p>暫無政府券</p>'}</details></div>`;
+        }).join('')}</div><p class="hint">商戶券 ${merchantTotal} 張、禮遇券 ${giftTotal} 張另計；圖表只比較政府電子券抽中面額。</p>`;
         const cachedWeeks = Object.keys(periodData || {}).length;
         const periodText = mode === 'all' ? `全期 ${cachedWeeks}/${WEEKS.length} 週` : '本週';
         const completeness = mode === 'all' && !online
           ? `離線僅統計本機已載入週次（${cachedWeeks}/${WEEKS.length}）；連線後可取得全期。`
           : allPeriodStatsError;
-        $('funStatsNote').textContent = `${periodText}；排行金額只計政府電子優惠，商戶券／禮遇券另列張數。${completeness ? ` ${completeness}` : ''}`;
+        $('funStatsNote').textContent = `${periodText}；圖表只計政府電子券，包含已用券。${completeness ? ` ${completeness}` : ''}`;
       }
 
       function renderRegistrationStatus() {
@@ -1288,12 +1376,13 @@
         const payment = $('recordWallet').value;
         if (!member || !payment) {
           $('recordStatus').textContent = '此成員尚未在家庭支付設定啟用方式。';
+          $('saveDraw').disabled = true;
           return;
         }
         const recordCount = Object.values(coupons).filter(coupon => coupon.member === member && coupon.payment === payment).length;
-        $('recordStatus').textContent = recordCount
-          ? `${member} · ${payment} 本週已有 ${recordCount} 項結果紀錄；如需整批重登，請先在券庫移除此錢包的三項結果。`
-          : `${member} · ${payment} 本週未有結果紀錄；三格儲存後會自動列為已登記。`;
+        const state = recordCount === 0 ? '未登記' : recordCount === 3 ? '已完成' : recordCount < 3 ? `不完整（${recordCount}/3）` : `歷史異常（${recordCount} 項）`;
+        $('recordStatus').textContent = `${member} · ${payment}：${state}。${isWeekExpired(currentWeek) ? '本週已到期，只供查閱。' : recordCount ? '已有結果不可覆蓋；如需重登，先在券庫核對並移除舊結果。' : '選齊三次結果才可整批儲存。'}`;
+        $('saveDraw').disabled = isWeekExpired(currentWeek) || recordCount > 0;
       }
 
       function renderWalletSettings() {
@@ -1325,8 +1414,8 @@
         const entries = Object.entries(coupons);
         const selectedWeek = WEEKS.find(week => week.key === currentWeek);
         const actualSpend = selectedWeek
-          ? ConsumeCalc.summarizeActualSpend(Object.values(coupons), localDateKey(selectedWeek.start), localDateKey(selectedWeek.end))
-          : { byMember: Object.create(null), totalCents: 0, hasUnrecorded: false };
+          ? ConsumeCalc.summarizeDashboard(Object.entries(coupons).map(([id, row]) => ({ ...row, id })), localDateKey(selectedWeek.start), localDateKey(selectedWeek.end), isWeekExpired(currentWeek))
+          : { byMember: Object.create(null), actualPaidCents: 0, hasMissingActual: false };
         const missingEstimates = selectedWeek ? ConsumeCalc.estimateMissingTransactionAmounts(Object.values(coupons), localDateKey(selectedWeek.start), localDateKey(selectedWeek.end)) : { byMember: Object.create(null), totalSpendCents: 0, totalPaidCents: 0 };
         const spendLabel = (totalCents, hasUnrecorded) => {
           const amountText = `MOP ${formatMop(totalCents / CENTS)}`;
@@ -1336,9 +1425,9 @@
           <thead><tr><th scope="col">家庭成員</th><th scope="col">實際自付</th></tr></thead>
           <tbody>${MEMBERS.map(member => {
             const spend = actualSpend.byMember[member];
-            return `<tr><th scope="row">${escapeHtml(member)}</th><td class="num">${spendLabel(spend?.totalCents || 0, Boolean(spend?.hasUnrecorded))}</td></tr>`;
+            return `<tr><th scope="row">${escapeHtml(member)}</th><td class="num">${spendLabel(spend?.actualPaidCents || 0, Boolean(spend?.hasMissingActual))}</td></tr>`;
           }).join('')}</tbody>
-          <tfoot><tr><th scope="row">全家合計</th><td class="num">${spendLabel(actualSpend.totalCents, actualSpend.hasUnrecorded)}</td></tr></tfoot>
+          <tfoot><tr><th scope="row">全家合計</th><td class="num">${spendLabel(actualSpend.actualPaidCents, actualSpend.hasMissingActual)}</td></tr></tfoot>
         </table><p class="hint"><strong>非實際估算（不計入已記錄金額）</strong>：支出 MOP ${formatMop(missingEstimates.totalSpendCents / CENTS)} · 自付 MOP ${formatMop(missingEstimates.totalPaidCents / CENTS)}</p>`;
         const activeEntries = isWeekExpired(currentWeek) ? [] : entries;
         const unusedGovernment = activeEntries.filter(([, coupon]) => coupon.type === 'gov' && !coupon.used);
@@ -1359,7 +1448,7 @@
           .filter(coupon => selectedVaultMembers.includes(coupon.member))
           .filter(coupon => paymentFilter === 'all' || coupon.payment === paymentFilter)
           .filter(coupon => {
-            if (statusFilter === 'unused') return !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type);
+            if (statusFilter === 'unused') return !isWeekExpired(currentWeek) && !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type);
             if (statusFilter === 'used') return coupon.used;
             if (statusFilter === 'expired') return isWeekExpired(currentWeek) && !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type);
             return true;
@@ -1421,7 +1510,7 @@
           </div>
           <div class="coupon-actions">
             ${actions}
-            <button class="button danger small" type="button" data-action="delete" data-id="${escapeHtml(coupon.id)}" aria-label="刪除${escapeHtml(coupon.member)} ${escapeHtml(coupon.payment)} 的${escapeHtml(couponName(coupon))}">刪除</button>
+            ${isWeekExpired(currentWeek) ? '' : `<button class="button danger small" type="button" data-action="delete" data-id="${escapeHtml(coupon.id)}" aria-label="刪除${escapeHtml(coupon.member)} ${escapeHtml(coupon.payment)} 的${escapeHtml(couponName(coupon))}">刪除</button>`}
           </div>
         </div>`;
       }
@@ -1430,7 +1519,8 @@
         const choices = GOV_AMOUNTS.map(amount => ({ value: String(amount), label: `MOP ${amount}`, ariaLabel: `政府電子優惠 MOP ${amount}` }))
           .concat([
             { value: 'merchant', label: '商戶券', ariaLabel: '商戶滿 MOP 100 減 MOP 12' },
-            { value: 'gift', label: '禮遇券', ariaLabel: '消費禮遇券' }
+            { value: 'gift', label: '禮遇券', ariaLabel: '消費禮遇券' },
+            { value: 'zero', label: '未抽中', ariaLabel: '無券結果／謝謝參與' }
           ]);
         $('slots').innerHTML = slotSelections.map((selected, index) => {
           const selectedChoice = choices.find(choice => choice.value === selected);
@@ -1472,6 +1562,51 @@
         $('planSummary').textContent = hadResults
           ? '條件已變更；按「計算用券方案」更新結果。'
           : '填入計劃總消費額，再按「計算用券方案」查看結果。';
+        renderUseCoupons();
+      }
+
+      function setCalcMode(mode) {
+        calcMode = mode;
+        const useCoupons = mode === 'coupons';
+        for (const id of ['shoppingAmountField', 'firstSpendField', 'calcSubmitRow', 'calcResults']) $(id).hidden = useCoupons;
+        $('useCouponsResults').hidden = !useCoupons;
+        $('modeShopping').setAttribute('aria-pressed', String(!useCoupons));
+        $('modeUseCoupons').setAttribute('aria-pressed', String(useCoupons));
+        $('modeShopping').classList.toggle('secondary', useCoupons);
+        $('modeUseCoupons').classList.toggle('secondary', !useCoupons);
+        $('calcModeIntro').textContent = useCoupons
+          ? '不用輸入消費額。以下按家人與錢包列出可用券，以及各錢包的最低購物額參考；不同錢包不能併成一單。'
+          : '輸入優惠前消費總額，查看分單後的預計實付。試算不含其他支付優惠、禮遇券或 MOP 500 卡式優惠。';
+        if (useCoupons) renderUseCoupons();
+      }
+
+      function renderUseCoupons() {
+        const target = $('useCouponsResults');
+        if (isWeekExpired(currentWeek)) {
+          target.innerHTML = '<div class="empty">所選週已到期，券只供查閱。</div>';
+          return;
+        }
+        const rows = [];
+        for (const member of MEMBERS.filter(value => selectedCalcMembers.includes(value))) {
+          for (const payment of WALLETS.filter(value => selectedCalcPayments.includes(value) && walletConfig[member]?.[value])) {
+            const list = walletRecords(member, payment).filter(coupon => !coupon.used);
+            const scenario = ConsumeCalc.calculateWalletSpendScenarios(list);
+            const giftCount = list.filter(coupon => coupon.type === 'gift').length;
+            if (!scenario.governmentAvailableCents && !scenario.merchantAvailableCount && !giftCount) continue;
+            const withMerchant = $('merchantAvailable').checked ? scenario.withMerchant : null;
+            const caseToShow = withMerchant || scenario.withoutMerchant;
+            rows.push({ member, payment, scenario, giftCount, caseToShow,
+              priority: caseToShow?.requiredGrossSpendCents ?? Number.MAX_SAFE_INTEGER });
+          }
+        }
+        rows.sort((a, b) => a.priority - b.priority || MEMBERS.indexOf(a.member) - MEMBERS.indexOf(b.member) || WALLETS.indexOf(a.payment) - WALLETS.indexOf(b.payment));
+        const week = WEEKS.find(value => value.key === currentWeek);
+        const deadline = `${week.end.getUTCMonth() + 1}/${week.end.getUTCDate()} 23:59`;
+        target.innerHTML = `<h3>可先完成的錢包</h3><p class="hint">按單一錢包所需購物額排序；到期 ${deadline}（澳門時間）。每張券的實際資格仍須核對。</p>${rows.length ? `<div class="use-coupon-list">${rows.map((row, index) => {
+          const { member, payment, scenario, giftCount, caseToShow } = row;
+          const merchantNote = scenario.merchantAvailableCount ? `商戶券 ${scenario.merchantAvailableCount} 張${$('merchantAvailable').checked ? '；本參考額每單最多計一張' : '；勾選合資格商戶後可另試算'}` : '';
+          return `<article class="use-coupon-card"><div class="use-coupon-head"><span class="priority-badge">建議 ${index + 1}</span><h4>${escapeHtml(member)} · ${escapeHtml(payment)}</h4></div><p>未用政府券 <strong>MOP ${formatMop(scenario.governmentAvailableCents / CENTS)}</strong></p><div class="dashboard-pair"><p><span>最低購物額參考</span><strong>${caseToShow ? `MOP ${formatMop(caseToShow.requiredGrossSpendCents / CENTS)}` : '—'}</strong></p><p><span>預計自付</span><strong>${caseToShow ? `MOP ${formatMop(caseToShow.outOfPocketCents / CENTS)}` : '—'}</strong></p></div><small>${merchantNote}${giftCount ? ` · 禮遇券 ${giftCount} 張另依券面使用` : ''}</small><button class="button secondary" type="button" data-wallet-redemption data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">核對交易後核銷</button></article>`;
+        }).join('')}</div>` : '<div class="empty">目前篩選沒有可用券；可切換家人與支付方式。</div>'}`;
       }
 
       function calculatePlan() {
@@ -1620,22 +1755,24 @@
           ? `<div class="muted">另有 ${option.unusedGiftCoupons.length} 張消費禮遇券，不折算現金；請依券面／商戶條件使用。</div>`
           : '';
         const redeemButton = option.usedCouponIds.length
-          ? `<div class="plan-actions"><button class="button" type="button" data-use-plan="${index}">確認核銷本方案（電子券 ${option.usedGovernmentCoupons.length} 張／商戶券 ${option.usedMerchantCoupons.length} 張）</button></div>`
+          ? `<div class="plan-actions">${option.transactions.map((transaction, transactionIndex) => transaction.governmentCoupons.length || transaction.merchantCoupon
+            ? `<button class="button" type="button" data-use-plan="${index}" data-transaction-index="${transactionIndex}">核對第 ${transactionIndex + 1} 單 · ${escapeHtml(transaction.member)}／${escapeHtml(transaction.payment)}</button>` : '').join('')}</div>`
           : '';
+        const transactionSummary = option.transactions.map((transaction, transactionIndex) => `<li><strong>第 ${transactionIndex + 1} 單 · ${escapeHtml(transaction.member)} · ${escapeHtml(transaction.payment)}</strong><span>購物 MOP ${formatMop(transaction.spend)} · 預計自付 MOP ${formatMop(transaction.pay)}</span></li>`).join('');
         return `<article class="plan-card ${index === 0 ? 'best' : ''}">
           <h3>${escapeHtml(title)}</h3>
           <div class="plan-amount-hero">
             <span>全家預估自付</span>
             <strong>MOP ${formatMop(option.totalPay)}</strong>
-            <small>計劃總消費 MOP ${formatMop(plan.total)} − 用券折抵 MOP ${formatMop(option.discount)}</small>
+            <small>預計優惠 MOP ${formatMop(option.discount)} · 建議 ${option.transactions.length} 單${plan.firstSpend ? '，另有已先消費' : ''}</small>
           </div>
-          ${nextCouponHints(option)}
-          ${planBreakdown(option, plan)}
-          <p class="breakdown-note">每單商戶券限 1 張；政府券可多張。順序：商戶券 → 電子券門檻 → 自付。表格可左右滑動。</p>
+          <ul class="plan-transaction-summary">${transactionSummary || '<li>本次未使用任何券。</li>'}</ul>
+          <details class="plan-details"><summary>再消費提示與門檻說明</summary>${nextCouponHints(option)}<p class="breakdown-note">提示的「需增加購物額」不是自付。每單商戶券限 1 張，政府券逐張核對。</p></details>
           <details class="plan-details">
-            <summary>查看分單與實際用券明細（${option.transactions.length} 筆）</summary>
+            <summary>查看分單、尚未使用的券與數學明細</summary>
             <div class="plan-details-content">
               ${firstTransaction}${transactions}${unallocated}
+              ${planBreakdown(option, plan)}
               <div class="muted">${unused}</div>
               ${giftNote}
               <div class="muted">電子券折扣 MOP ${formatMop(option.governmentDiscount)}；商戶折扣 MOP ${formatMop(option.merchantDiscount)}。</div>
@@ -1703,29 +1840,15 @@
       }
 
       function redemptionDateInputValue() {
-        const today = currentMacauDate();
-        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        return ConsumeCalc.macauDateKey();
       }
 
       function redemptionDateInCurrentWeek(value) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
         const week = WEEKS.find(item => item.key === currentWeek);
         if (!week) return false;
-        const date = new Date(`${value}T12:00:00`);
-        return Number.isFinite(date.getTime()) && date >= week.start && date <= week.end;
-      }
-
-      function openCouponRedemption(id) {
-        const coupon = coupons[id];
-        if (!coupon || !['gov', 'merchant', 'gift'].includes(coupon.type)) return;
-        const transaction = {
-          member: coupon.member,
-          payment: coupon.payment,
-          couponIds: [id],
-          governmentCoupons: coupon.type === 'gov' ? [coupon] : [],
-          pay: null
-        };
-        openRedemptionDialog([id], [transaction]);
+        const date = new Date(`${value}T12:00:00Z`);
+        return Number.isFinite(date.getTime()) && localDateKey(date) === value && value <= ConsumeCalc.macauDateKey() && date >= week.start && date <= week.end;
       }
 
       function restoreWalletPlanFocus() {
@@ -1773,7 +1896,7 @@
           : `直接核銷 · ${member} · ${payment}`;
         $('walletRedeemIntro').textContent = options.scenarioTitle
           ? `已依此方案預選用券；最低原始消費額參考 MOP ${formatMop((options.minimumGrossSpendCents || 0) / CENTS)}。請按實際交易記錄核對實付；最後確認前不會改變券狀態。`
-          : '勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。下一步顯示摘要；實際金額可留空並保存為估算。';
+          : '勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。下一步須填入實際支出與實付。';
         $('walletRedeemChoices').innerHTML = candidates.map(coupon => {
           const label = coupon.type === 'gov' ? `政府電子優惠 MOP ${formatMop(coupon.amount)}`
             : coupon.type === 'merchant' ? '商戶滿 MOP 100 減 MOP 12'
@@ -1804,7 +1927,7 @@
         status.textContent = merchantCount > 1
           ? '每筆交易最多選一張商戶券，請取消多出的商戶券。'
           : selected.length
-            ? `已選 ${selected.length} 張：${selected.map(coupon => couponName(coupon)).join('、')}。下一步核對摘要；未填實際金額會保存為估算。`
+            ? `已選 ${selected.length} 張：${selected.map(coupon => couponName(coupon)).join('、')}。下一步核對實際交易日期、支出與實付。`
             : '請勾選本次同一筆交易要使用的券；未勾選的券會保留。';
         $('continueWalletRedeem').disabled = !valid;
         return { valid, selected };
@@ -1870,7 +1993,7 @@
 
         pendingRedemption = { ids, transactions: normalized, week: currentWeek };
         $('redeemDialogTitle').textContent = '確認核銷';
-        $('redeemDialogHint').textContent = '金額按已選券預填估算，可直接修改；確認即表示以下金額是這筆已完成交易的實際支出與實付。';
+        $('redeemDialogHint').textContent = '請參照支付平台交易紀錄自行輸入實際支出與實付。最低估算只供參考，不會自動當作實際金額。';
         $('redeemDateField').hidden = false;
         $('redeemDate').value = redemptionDateInputValue();
         $('redeemTransactions').innerHTML = normalized.map(transaction => {
@@ -1912,11 +2035,11 @@
           const detailContent = `${couponGroups}${couponOrder}${rule}${thresholdStatus}`;
           return `<section class="redeem-transaction">
             <h3>${escapeHtml(transaction.member)} · ${escapeHtml(transaction.payment)}</h3>
-            <p class="hint">${canEstimate ? '預填為估算，確認後記為實際金額。' : '請按已完成交易填入實際金額。'}</p>
-            <label for="redeemSpend-${transaction.index}">支出金額（優惠前 MOP；${canEstimate ? '預填最低估算' : '必填'}）</label>
-            <input id="redeemSpend-${transaction.index}" class="control" data-redemption-amount="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" value="${canEstimate ? (minimum / CENTS).toFixed(2) : ''}" required>
-            <label for="${amountId}">實付金額（MOP；${canEstimate ? '預填估算' : '必填'}）</label>
-            <input id="${amountId}" class="control" data-redemption-amount="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" value="${canEstimate ? (estimatedPaid / CENTS).toFixed(2) : ''}" required>
+            <p class="hint">${canEstimate ? `最低購物額參考 MOP ${formatMop(minimum / CENTS)}；估算自付 MOP ${formatMop(estimatedPaid / CENTS)}。請填真實交易金額。` : '請按已完成交易填入實際金額。'}</p>
+            <label for="redeemSpend-${transaction.index}">支出金額（優惠前 MOP；必填）</label>
+            <input id="redeemSpend-${transaction.index}" class="control" data-redemption-amount="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" required>
+            <label for="${amountId}">實付金額（MOP；必填）</label>
+            <input id="${amountId}" class="control" data-redemption-amount="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" required>
             <details class="redeem-review-details"><summary>查看已選券與計算詳情</summary>${detailContent}</details>
           </section>`;
         }).join('');
@@ -2065,20 +2188,18 @@
         showToast(online ? `已核銷並記錄 ${ids.length} 張券。` : `已在本機記錄 ${ids.length} 張核銷；尚未同步雲端。`);
       }
 
-      function redeemPlan(index) {
+      function redeemPlan(index, transactionIndex) {
         const option = lastCalculatedPlan?.plans[index];
         if (!option || !option.usedCouponIds.length) return;
-        const transactions = option.transactions.map(transaction => ({
-          member: transaction.member,
-          payment: transaction.payment,
-          couponIds: [
-            transaction.merchantCoupon?.id,
-            ...transaction.governmentCoupons.map(coupon => coupon.id)
-          ].filter(Boolean),
-          governmentCoupons: transaction.governmentCoupons,
-          pay: transaction.pay
-        })).filter(transaction => transaction.couponIds.length);
-        openRedemptionDialog(option.usedCouponIds, transactions);
+        const transaction = option.transactions[transactionIndex];
+        if (!transaction) return;
+        const ids = [transaction.merchantCoupon?.id, ...transaction.governmentCoupons.map(coupon => coupon.id)].filter(Boolean);
+        if (!ids.length) return;
+        openWalletRedemption(transaction.member, transaction.payment, {
+          preselectedIds: ids,
+          scenarioTitle: `方案第 ${transactionIndex + 1} 單`,
+          minimumGrossSpendCents: toCents(transaction.spend)
+        });
       }
 
       function renderCouponVaultFilters() {
@@ -2093,6 +2214,10 @@
       }
 
       function collectDrawResults() {
+        if (isWeekExpired(currentWeek)) {
+          showToast('所選週已到期，只供查閱。');
+          return null;
+        }
         const member = $('recordMember').value;
         const payment = $('recordWallet').value;
         if (!member || !payment) {
@@ -2115,6 +2240,9 @@
           } else if (value === 'gift') {
             coupon.type = 'gift';
             coupon.label = '消費禮遇券';
+          } else if (value === 'zero') {
+            coupon.type = 'zero';
+            coupon.amount = 0;
           } else {
             const amount = Number(value);
             if (!GOV_AMOUNTS.includes(amount)) return null;
@@ -2131,6 +2259,7 @@
       }
 
       async function undoTransaction(member, payment, transactionId) {
+        if (isWeekExpired(currentWeek)) { showToast('所選週已到期，只供查閱。'); return; }
         // Never infer a legacy transaction from a wallet, timestamp, or missing ID.
         if (typeof transactionId !== 'string' || !transactionId.trim() || !member || !payment) return;
         const operationWeek = currentWeek, operationPath = weekPath();
@@ -2174,6 +2303,7 @@
       }
 
       function openCorrection(member, payment, transactionId) {
+        if (isWeekExpired(currentWeek)) { showToast('所選週已到期，只供查閱。'); return; }
         const rows = walletRecords(member, payment).filter(c => correctionRedemption(c, transactionId));
         if (!rows.length) return;
         pendingCorrection = { member, payment, transactionId, ids: rows.map(c => c.id), week: currentWeek };
@@ -2223,12 +2353,16 @@
           try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* Preserve successful remote update. */ }
           if (currentWeek === context.week) { Object.assign(coupons, next); invalidateAllPeriodStats(); render(); }
           $('correctionDialog').close(); pendingCorrection = null;
-          showToast('已更新同一筆交易，沒有新增或重複計算。');
+          showToast(online ? '已更新同一筆交易，沒有新增或重複計算。' : '更正只保存在此裝置，尚未同步雲端。');
         } catch { $('correctionStatus').textContent = '雲端儲存失敗；原交易未更改，請稍後再試。'; }
         finally { $('saveCorrection').disabled = false; }
       }
 
       function storeBatch(rows) {
+        if (!Array.isArray(rows) || rows.length !== 3 || isWeekExpired(currentWeek) || isDrawn(rows[0].member, rows[0].payment)) {
+          showToast('三項結果不完整、已有紀錄或週次已到期；未儲存。');
+          return Promise.resolve();
+        }
         const updates = {};
         const timestamp = Date.now();
         for (const [index, row] of rows.entries()) {
@@ -2259,22 +2393,26 @@
       }
 
       function writeCoupon(id, value) {
+        if (isWeekExpired(currentWeek)) { showToast('所選週已到期，只供查閱。'); return Promise.resolve(false); }
         invalidateAllPeriodStats();
         if (online && database) {
           return database.ref(`${weekPath()}/coupons/${id}`).set(value)
+            .then(() => true)
             .catch(() => {
               if (value === null) delete coupons[id];
               else coupons[id] = value;
               saveLocal();
               render();
               showToast('雲端儲存失敗；變更只保存在此裝置。');
+              return false;
             });
         }
         if (value === null) delete coupons[id];
         else coupons[id] = value;
         saveLocal();
         render();
-        return Promise.resolve();
+        showToast('變更只保存在此裝置，尚未同步雲端。');
+        return Promise.resolve(true);
       }
 
       function saveWalletSettings(member) {
@@ -2311,6 +2449,11 @@
       async function importBackup(event) {
         const file = event.target.files?.[0];
         if (!file) return;
+        if (isWeekExpired(currentWeek)) {
+          showToast('所選週已到期，只供查閱；未匯入備份。');
+          event.target.value = '';
+          return;
+        }
         try {
           if (file.size > 1024 * 1024) throw new Error('size');
           const data = JSON.parse(await file.text());
@@ -2352,11 +2495,7 @@
       }
 
       function currentMacauDate() {
-        const parts = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Asia/Macau', year: 'numeric', month: '2-digit', day: '2-digit'
-        }).formatToParts(new Date());
-        const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-        return new Date(Number(values.year), Number(values.month) - 1, Number(values.day), 12);
+        return new Date(`${ConsumeCalc.macauDateKey()}T12:00:00Z`);
       }
 
       function isWeekExpired(weekKey) {
@@ -2367,8 +2506,8 @@
       function renderWeekExpiry() {
         const week = WEEKS.find(item => item.key === currentWeek);
         if (!week) return;
-        const weekday = ['日', '一', '二', '三', '四', '五', '六'][week.end.getDay()];
-        const expiry = `${week.end.getMonth() + 1}/${week.end.getDate()}（週${weekday}）23:59`;
+        const weekday = ['日', '一', '二', '三', '四', '五', '六'][week.end.getUTCDay()];
+        const expiry = `${week.end.getUTCMonth() + 1}/${week.end.getUTCDate()}（週${weekday}）23:59`;
         const expired = isWeekExpired(currentWeek);
         const today = currentMacauDate();
         if (today < CAMPAIGN_START) {
@@ -2482,12 +2621,15 @@
       });
       $('calcForm').addEventListener('submit', event => {
         event.preventDefault();
+        if (calcMode !== 'shopping') return;
         if (!calculatePlan()) return;
         const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         $('calcResults').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
       });
       $('totalSpend').addEventListener('input', renderCalc);
       $('firstSpend').addEventListener('input', renderCalc);
+      $('modeShopping').addEventListener('click', () => setCalcMode('shopping'));
+      $('modeUseCoupons').addEventListener('click', () => setCalcMode('coupons'));
       $('statMode').addEventListener('change', renderFunStats);
 
       $('calcMemberFilter').addEventListener('click', event => {
@@ -2518,7 +2660,7 @@
       $('plans').addEventListener('click', event => {
         const button = event.target.closest('[data-use-plan]');
         if (!button) return;
-        redeemPlan(Number(button.dataset.usePlan));
+        redeemPlan(Number(button.dataset.usePlan), Number(button.dataset.transactionIndex));
       });
       $('redeemForm').addEventListener('submit', submitRedemption);
       $('redeemDate').addEventListener('input', validateRedemptionForm);
@@ -2565,7 +2707,7 @@
         const rows = collectDrawResults();
         if (!rows) return;
         $('saveDraw').disabled = true;
-        storeBatch(rows).finally(() => { $('saveDraw').disabled = false; });
+        storeBatch(rows).finally(renderRegistrationStatus);
       });
       $('memberSettings').addEventListener('change', event => {
         const input = event.target.closest('[data-member][data-wallet]');
@@ -2589,6 +2731,13 @@
         const button = event.target.closest('[data-wallet-redemption]');
         if (!button) return;
         openWalletRedemption(button.dataset.member, button.dataset.payment);
+      });
+      $('memberCompare').addEventListener('click', event => {
+        if (event.target.closest('[data-open-registration]')) setActivePanel('record');
+      });
+      $('useCouponsResults').addEventListener('click', event => {
+        const button = event.target.closest('[data-wallet-redemption]');
+        if (button) openWalletRedemption(button.dataset.member, button.dataset.payment);
       });
       $('walletSpendPlanTable').addEventListener('click', event => {
         const button = event.target.closest('[data-wallet-plan-redemption]');
@@ -2632,10 +2781,10 @@
             ? '此券已記錄核銷。刪除只會移除此工具內的紀錄，不會撤銷支付平台核銷；確定刪除？'
             : '確定刪除此抽獎結果？刪除最後一項後，該支付方式會顯示未登記。建議先匯出備份。';
           if (!window.confirm(message)) return;
-          writeCoupon(id, null).then(() => showToast('結果已刪除。'));
+          writeCoupon(id, null).then(saved => { if (saved && online) showToast('結果已刪除並同步。'); });
           return;
         }
-        if (button.dataset.action === 'redeem') openCouponRedemption(id);
+        if (button.dataset.action === 'redeem') openWalletRedemption(coupon.member, coupon.payment, { preselectedIds: [id] });
       });
 
       $('export').addEventListener('click', exportBackup);
