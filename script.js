@@ -1168,6 +1168,41 @@
         const canUndo = !isWeekExpired(currentWeek) && validTransactionId && !t.undone && t.rows.every(c => coupons[c.id]?.used && coupons[c.id]?.redemption?.transactionId === r.transactionId);
         return `<div class="transaction-record"><span>交易記錄：支出 ${transactionAmountLabel(t, 'actualSpendCents')}／實付 ${transactionAmountLabel(t, 'actualPaidCents')}</span>${!t.undone ? '<small>估算為非實際金額，不計入已記錄金額。</small>' : ''}${t.undone ? `<strong class="restored-marker">${estimated ? '已復原（估算已取消）' : '已復原（保留金融紀錄）'}</strong>` : ''}${!isWeekExpired(currentWeek) && validTransactionId && t.undone && !estimated ? `<button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">更正實際金額</button>` : ''}${canUndo ? `<details class="transaction-actions"><summary>復原或更正此筆交易</summary><div class="undo-transaction"><span><strong>${escapeHtml(member)}／${escapeHtml(payment)}</strong> · ${t.rows.map(c => escapeHtml(couponName(c))).join('、')}</span><small class="undo-warning">網頁復原不等於支付平台退券或退款；請先核對平台紀錄。</small><button type="button" class="text-button" data-undo-transaction="${escapeHtml(r.transactionId)}" data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">復原並刪除此筆核銷記錄</button></div><button type="button" class="text-button" data-correct-transaction="${escapeHtml(r.transactionId)}" data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">更正實際金額</button></details>` : !validTransactionId ? '<small>舊紀錄缺少交易識別，未推算金額</small>' : ''}</div>`;
       }
+      function drawnTotals(rows) {
+        const totals = { governmentCents: 0, merchant: 0, gift: 0, zero: 0, byMember: Object.create(null) };
+        for (const coupon of rows) {
+          const member = totals.byMember[coupon.member] ||= { governmentCents: 0, merchant: 0, gift: 0 };
+          if (coupon.type === 'gov') { const cents = toCents(coupon.amount); totals.governmentCents += cents; member.governmentCents += cents; }
+          else if (coupon.type === 'merchant') { totals.merchant++; member.merchant++; }
+          else if (coupon.type === 'gift') { totals.gift++; member.gift++; }
+          else totals.zero++;
+        }
+        return totals;
+      }
+
+      function drawnSummaryMarkup(rows) {
+        const totals = drawnTotals(rows);
+        const money = cents => `MOP ${formatMop(cents / CENTS)}`;
+        let wallets = 0, done = 0;
+        for (const member of MEMBERS) for (const payment of activeWallets(member)) { wallets++; if (walletRegistrationState(member, payment).kind === 'done') done++; }
+        const extras = [totals.merchant ? `商戶券 ${totals.merchant} 張` : '', totals.gift ? `禮遇券 ${totals.gift} 張` : '', totals.zero ? `未抽中 ${totals.zero} 次` : ''].filter(Boolean).join(' · ');
+        const top = Math.max(1, ...MEMBERS.map(member => totals.byMember[member]?.governmentCents || 0));
+        return `<section class="dashboard-block drawn-block" aria-label="本週抽中">
+          <div class="dashboard-block-head"><span class="dashboard-kicker">抽獎</span><h3>本週抽中</h3><span class="drawn-progress">${done}／${wallets} 個錢包已登記</span></div>
+          <div class="drawn-layout">
+            <div>
+              <p class="dashboard-main"><span>政府電子券面額（含已用）</span><strong>${money(totals.governmentCents)}</strong></p>
+              <small>${extras || '未抽中商戶券或禮遇券'}</small>
+            </div>
+            <ul class="drawn-members">${MEMBERS.map(member => {
+              const row = totals.byMember[member] || { governmentCents: 0, merchant: 0, gift: 0 };
+              const others = [row.merchant ? `商戶 ${row.merchant}` : '', row.gift ? `禮遇 ${row.gift}` : ''].filter(Boolean).join('·');
+              return `<li><span>${escapeHtml(member)}</span><i aria-hidden="true"><b style="width:${Math.round(row.governmentCents / top * 100)}%"></b></i><strong>${money(row.governmentCents)}</strong>${others ? `<small>${others}</small>` : ''}</li>`;
+            }).join('')}</ul>
+          </div>
+        </section>`;
+      }
+
       function renderDrawStates() {
         const all = Object.entries(coupons).map(([id, coupon]) => ({ ...coupon, id }));
         const week = WEEKS.find(item => item.key === currentWeek);
@@ -1178,6 +1213,7 @@
         $('memberCompare').innerHTML = !summary.hasResults
           ? `<div class="empty dashboard-empty"><strong>本週尚無登記結果</strong><p>登記完整三次抽獎結果後，可在此查看待用券與實際消費。</p><button class="button" type="button" data-open-registration>前往登記</button></div>`
           : `<div class="dashboard-sections">
+              ${drawnSummaryMarkup(all)}
               <section class="dashboard-block unused-block" aria-label="未使用的券">
                 <div class="dashboard-block-head"><span class="dashboard-kicker">消費前</span><h3>未使用的券</h3></div>
                 <p class="dashboard-main"><span>政府電子券面額</span><strong>${money(summary.unusedGovernmentCents)}</strong></p>
@@ -1196,7 +1232,7 @@
           const memberSummary = summary.byMember[member] || { unusedGovernmentCents: 0, actualPaidCents: 0, hasMissingActual: false };
           const wallets = WALLETS.filter(payment => walletConfig[member]?.[payment] || records.some(coupon => coupon.payment === payment));
           const unregistered = expired ? 0 : wallets.filter(payment => walletConfig[member]?.[payment] && walletRegistrationState(member, payment).kind !== 'done').length;
-          return `<details class="member-wallet-section" data-member-group="${escapeHtml(member)}"${expandedMembers.has(member) ? ' open' : ''}><summary class="member-heading"><h3>${escapeHtml(member)}${unregistered ? `<em class="pending-badge">${unregistered} 個未登記</em>` : ''}</h3><span>待用 ${money(memberSummary.unusedGovernmentCents)} · 已付 ${actual(memberSummary, 'actualPaidCents')}</span></summary>${wallets.map(payment => {
+          return `<details class="member-wallet-section" data-member-group="${escapeHtml(member)}"${expandedMembers.has(member) ? ' open' : ''}><summary class="member-heading"><h3>${escapeHtml(member)}${unregistered ? `<em class="pending-badge">${unregistered} 個未登記</em>` : ''}</h3><span>抽中 ${money(drawnTotals(records).governmentCents)} · 待用 ${money(memberSummary.unusedGovernmentCents)} · 已付 ${actual(memberSummary, 'actualPaidCents')}</span></summary>${wallets.map(payment => {
             const list = records.filter(coupon => coupon.payment === payment);
             const row = summary.byWallet[`${member}|${payment}`] || { unusedGovernmentCents: 0, minimumSpendCents: 0, estimatedPayCents: 0, actualPaidCents: 0, hasMissingActual: false };
             const available = list.filter(coupon => !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type));
@@ -1964,14 +2000,15 @@
           candidates,
           scenarioTitle: options.scenarioTitle || '',
           minimumGrossSpendCents: options.minimumGrossSpendCents ?? null,
-          prefillPayCents: options.prefillPayCents ?? null
+          prefillPayCents: options.prefillPayCents ?? null,
+          preselectedIds: [...preselectedIds]
         };
         $('walletRedeemTitle').textContent = options.scenarioTitle
           ? `${options.scenarioTitle} · ${member} · ${payment}`
           : `直接核銷 · ${member} · ${payment}`;
         $('walletRedeemIntro').textContent = options.scenarioTitle
           ? `已依此方案預選用券；最低原始消費額參考 MOP ${formatMop((options.minimumGrossSpendCents || 0) / CENTS)}。請按實際交易記錄核對實付；最後確認前不會改變券狀態。`
-          : '勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。下一步須填入實際支出與實付。';
+          : '勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。下一步會按券面額自動填入支出與實付，可再修改。';
         $('walletRedeemChoices').innerHTML = candidates.map(coupon => {
           const label = coupon.type === 'gov' ? `政府電子優惠 MOP ${formatMop(coupon.amount)}`
             : coupon.type === 'merchant' ? '商戶滿 MOP 100 減 MOP 12'
@@ -2020,13 +2057,20 @@
           payment,
           couponIds,
           governmentCoupons: selection.selected.filter(coupon => coupon.type === 'gov'),
-          pay: null
+          pay: null,
+          planSpendCents: context.minimumGrossSpendCents !== null && couponIds.length === context.preselectedIds.length && couponIds.every(id => context.preselectedIds.includes(id))
+            ? context.minimumGrossSpendCents
+            : null
         };
         walletPlanTransitioning = Boolean(walletPlanReturnFocus);
         $('walletRedeemDialog').close();
         pendingWalletRedemption = null;
         openRedemptionDialog(couponIds, [transaction]);
         walletPlanTransitioning = false;
+      }
+
+      function formatInputCents(cents) {
+        return (cents / CENTS).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
       }
 
       function openRedemptionDialog(couponIds, transactions) {
@@ -2047,7 +2091,14 @@
           const governmentCoupons = transactionCoupons.filter(coupon => coupon.type === 'gov');
           const governmentAmountCents = governmentCoupons.reduce((sum, coupon) => sum + toCents(coupon.amount), 0);
           const thresholdCents = governmentAmountCents * 3;
+          const merchantCount = transactionCoupons.filter(coupon => coupon.type === 'merchant').length;
+          const discountCents = governmentAmountCents + merchantCount * 1200;
+          const canPrefill = discountCents > 0;
+          const minimumCents = Math.max(thresholdCents + merchantCount * 1200, merchantCount ? 10000 : 0);
+          const prefillSpendCents = canPrefill ? Math.max(minimumCents, Number.isInteger(transaction.planSpendCents) ? transaction.planSpendCents : 0) : null;
           return {
+            prefillSpendCents,
+            prefillPaidCents: canPrefill ? prefillSpendCents - discountCents : null,
             index,
             member: transaction.member,
             payment: transaction.payment,
@@ -2068,7 +2119,7 @@
 
         pendingRedemption = { ids, transactions: normalized, week: currentWeek };
         $('redeemDialogTitle').textContent = '確認核銷';
-        $('redeemDialogHint').textContent = '請參照支付平台交易紀錄自行輸入實際支出與實付。最低估算只供參考，不會自動當作實際金額。';
+        $('redeemDialogHint').textContent = '已按所用券的面額自動填入支出（優惠前）與實付；如實際交易金額不同，請按支付平台紀錄修改。改支出時實付會自動跟著計算。';
         $('redeemDateField').hidden = false;
         $('redeemDate').value = redemptionDateInputValue();
         $('redeemTransactions').innerHTML = normalized.map(transaction => {
@@ -2077,6 +2128,8 @@
           const minimum = Math.max(transaction.thresholdCents + merchantCoupons.length * 1200, merchantCoupons.length ? 10000 : 0);
           const estimatedPaid = minimum - transaction.governmentAmountCents - merchantCoupons.length * 1200;
           const canEstimate = transaction.governmentAmountCents > 0 || merchantCoupons.length > 0;
+          const discountCents = transaction.governmentAmountCents + merchantCoupons.length * 1200;
+          const prefillSpend = transaction.prefillSpendCents ?? minimum;
           const governmentCoupons = transaction.coupons.filter(coupon => coupon.type === 'gov');
           const otherCoupons = transaction.coupons.filter(coupon => !['merchant', 'gov'].includes(coupon.type));
           const couponList = rows => rows.length
@@ -2110,11 +2163,11 @@
           const detailContent = `${couponGroups}${couponOrder}${rule}${thresholdStatus}`;
           return `<section class="redeem-transaction">
             <h3>${escapeHtml(transaction.member)} · ${escapeHtml(transaction.payment)}</h3>
-            <p class="hint">${canEstimate ? `最低購物額參考 MOP ${formatMop(minimum / CENTS)}；估算自付 MOP ${formatMop(estimatedPaid / CENTS)}。請填真實交易金額。` : '請按已完成交易填入實際金額。'}</p>
+            <p class="hint">${canEstimate ? `已按券面額填入：支出 MOP ${formatMop(prefillSpend / CENTS)}，折扣 MOP ${formatMop(discountCents / CENTS)}，實付 MOP ${formatMop((prefillSpend - discountCents) / CENTS)}。如有不同請修改。` : '禮遇券沒有面額可推算，請按已完成交易填入實際金額。'}</p>
             <label for="redeemSpend-${transaction.index}">支出金額（優惠前 MOP；必填）</label>
-            <input id="redeemSpend-${transaction.index}" class="control" data-redemption-amount="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" required>
+            <input id="redeemSpend-${transaction.index}" class="control" data-redemption-amount="${transaction.index}" data-redemption-spend="${transaction.index}" data-discount-cents="${discountCents}" type="number" min="0" step="0.01" inputmode="decimal" required${canEstimate ? ` value="${formatInputCents(prefillSpend)}"` : ''}>
             <label for="${amountId}">實付金額（MOP；必填）</label>
-            <input id="${amountId}" class="control" data-redemption-amount="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" required>
+            <input id="${amountId}" class="control" data-redemption-amount="${transaction.index}" data-redemption-paid="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" required${canEstimate ? ` value="${formatInputCents(prefillSpend - discountCents)}"` : ''}>
             <details class="redeem-review-details"><summary>查看已選券與計算詳情</summary>${detailContent}</details>
           </section>`;
         }).join('');
@@ -2225,6 +2278,7 @@
             date: redeemedOn,
             ...check.estimates[transaction.index],
             amountKind: 'actual',
+            amountSource: transaction.prefillSpendCents !== null && spend === transaction.prefillSpendCents && paid === transaction.prefillPaidCents ? 'coupon-face-value' : 'manual',
             actualConfirmedAt: usedAt,
             transactionId: `${usedAt}-${transactionNonce}-${transaction.index}`
           };
@@ -2760,6 +2814,16 @@
       $('redeemForm').addEventListener('submit', submitRedemption);
       $('redeemDate').addEventListener('input', validateRedemptionForm);
       $('redeemTransactions').addEventListener('input', event => {
+        const spendInput = event.target.closest('[data-redemption-spend]');
+        if (spendInput) {
+          const paidInput = $(`redeemAmount-${spendInput.dataset.redemptionSpend}`);
+          const discount = Number(spendInput.dataset.discountCents) || 0;
+          if (paidInput && paidInput.dataset.edited !== 'true' && discount > 0 && spendInput.value !== '') {
+            const spend = toCents(spendInput.value);
+            if (Number.isInteger(spend)) paidInput.value = formatInputCents(Math.max(0, spend - discount));
+          }
+        }
+        if (event.target.matches('[data-redemption-paid]')) event.target.dataset.edited = 'true';
         if (event.target.matches('[data-redemption-amount]')) validateRedemptionForm();
       });
       $('cancelRedemption').addEventListener('click', () => $('redeemDialog').close());

@@ -55,6 +55,10 @@ with sync_playwright() as playwright:
     home = page.locator('#memberCompare').inner_text()
     for expected in ('MOP 20', 'MOP 60', 'MOP 40', 'MOP 100', 'MOP 70', 'MOP 30', '部分交易未記錄'):
         assert expected in home, expected
+    drawn = page.locator('.drawn-block').inner_text()
+    for expected in ('本週抽中', 'MOP 50', '商戶券 1 張', '禮遇券 2 張', '2／23 個錢包已登記'):
+        assert expected in drawn, expected
+    assert '抽中 MOP 30' in page.locator('[data-member-group="媽媽"] > summary').inner_text()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert 'mom-one' not in page.locator('body').inner_text()
     assert 'dadGov' not in page.locator('body').inner_text()
@@ -76,10 +80,17 @@ with sync_playwright() as playwright:
     assert page.locator('#walletRedeemChoices [data-wallet-coupon]:checked').count() == 2
     page.locator('#continueWalletRedeem').click()
     assert page.locator('#redeemDialog').is_visible()
-    assert page.locator('#redeemSpend-0').input_value() == ''
-    assert page.locator('#redeemAmount-0').input_value() == ''
-    assert not page.locator('#confirmRedemption').is_enabled()
+    # Amounts are auto-filled from the coupons' face value and stay editable.
+    assert page.locator('#redeemSpend-0').input_value() == '100'
+    assert page.locator('#redeemAmount-0').input_value() == '68'
+    assert page.locator('#confirmRedemption').is_enabled()
+    page.locator('#redeemSpend-0').fill('130')
+    assert page.locator('#redeemAmount-0').input_value() == '98'
+    page.locator('#redeemAmount-0').fill('95')
     page.locator('#redeemSpend-0').fill('100')
+    assert page.locator('#redeemAmount-0').input_value() == '95'
+    page.locator('#redeemAmount-0').fill('')
+    assert not page.locator('#confirmRedemption').is_enabled()
     page.locator('#redeemAmount-0').fill('68')
     page.locator('#redeemDate').fill('2026-10-11')
     assert not page.locator('#confirmRedemption').is_enabled()
@@ -117,11 +128,15 @@ with sync_playwright() as playwright:
     assert write_count(page) == 1
     page.locator('#walletRedemptionCards [data-wallet-redemption][data-member="爸爸"]').click()
     page.locator('#continueWalletRedeem').click()
-    page.locator('#redeemSpend-0').fill('60')
-    page.locator('#redeemAmount-0').fill('40')
+    assert page.locator('#redeemSpend-0').input_value() == '60'
+    assert page.locator('#redeemAmount-0').input_value() == '40'
     assert page.locator('#confirmRedemption').is_enabled()
     page.locator('#confirmRedemption').click()
     assert write_count(page) == 2
+    saved = page.evaluate("Object.values(window.__fake.writes[1].changes).find(value => value && value.actualPaidCents !== undefined)")
+    assert saved['actualSpendCents'] == 6000 and saved['actualPaidCents'] == 4000
+    assert saved['amountSource'] == 'coupon-face-value' and saved['amountKind'] == 'actual'
+    assert 'MOP 60' in page.locator('.drawn-block').inner_text()  # redeemed coupons still count as drawn
     assert 'MOP 110' in page.locator('#memberCompare').inner_text()
 
     # Correction replaces the transaction amount; undo removes that transaction once.
