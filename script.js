@@ -932,6 +932,31 @@
         return Object.values(coupons).some(coupon => coupon.member === member && coupon.payment === payment);
       }
 
+      function walletRegistrationState(member, payment) {
+        const count = Object.values(coupons).filter(coupon => coupon.member === member && coupon.payment === payment).length;
+        if (count === 0) return { count, kind: 'none', label: '未登記' };
+        if (count === 3) return { count, kind: 'done', label: '已登記' };
+        if (count < 3) return { count, kind: 'partial', label: `不完整 ${count}/3` };
+        return { count, kind: 'anomaly', label: `異常 ${count} 項` };
+      }
+
+      function pendingRegistrations() {
+        if (isWeekExpired(currentWeek)) return [];
+        return MEMBERS.flatMap(member => activeWallets(member)
+          .filter(payment => walletRegistrationState(member, payment).kind === 'none')
+          .map(payment => ({ member, payment })));
+      }
+
+      function openRegistration(member, payment) {
+        if (member && MEMBERS.includes(member)) {
+          $('recordMember').value = member;
+          setWalletOptions('recordWallet', member, payment);
+          resetDrawResults();
+        }
+        renderRegistrationStatus();
+        setActivePanel('record');
+      }
+
       function activeWallets(member) {
         return WALLETS.filter(wallet => walletConfig[member]?.[wallet]);
       }
@@ -958,7 +983,8 @@
 
       function setWalletOptions(id, member, preferred) {
         const available = activeWallets(member);
-        fillSelect(id, available.map(wallet => ({ value: wallet, label: wallet })), preferred);
+        const labelFor = wallet => id === 'recordWallet' ? `${wallet}（${walletRegistrationState(member, wallet).label}）` : wallet;
+        fillSelect(id, available.map(wallet => ({ value: wallet, label: labelFor(wallet) })), preferred);
         $(id).disabled = !available.length;
         if (!available.length) $(id).innerHTML = '<option value="">請先在家庭支付設定啟用方式</option>';
       }
@@ -1169,7 +1195,8 @@
           const records = all.filter(coupon => coupon.member === member);
           const memberSummary = summary.byMember[member] || { unusedGovernmentCents: 0, actualPaidCents: 0, hasMissingActual: false };
           const wallets = WALLETS.filter(payment => walletConfig[member]?.[payment] || records.some(coupon => coupon.payment === payment));
-          return `<details class="member-wallet-section" data-member-group="${escapeHtml(member)}"${expandedMembers.has(member) ? ' open' : ''}><summary class="member-heading"><h3>${escapeHtml(member)}</h3><span>待用 ${money(memberSummary.unusedGovernmentCents)} · 已付 ${actual(memberSummary, 'actualPaidCents')}</span></summary>${wallets.map(payment => {
+          const unregistered = expired ? 0 : wallets.filter(payment => walletConfig[member]?.[payment] && walletRegistrationState(member, payment).kind !== 'done').length;
+          return `<details class="member-wallet-section" data-member-group="${escapeHtml(member)}"${expandedMembers.has(member) ? ' open' : ''}><summary class="member-heading"><h3>${escapeHtml(member)}${unregistered ? `<em class="pending-badge">${unregistered} 個未登記</em>` : ''}</h3><span>待用 ${money(memberSummary.unusedGovernmentCents)} · 已付 ${actual(memberSummary, 'actualPaidCents')}</span></summary>${wallets.map(payment => {
             const list = records.filter(coupon => coupon.payment === payment);
             const row = summary.byWallet[`${member}|${payment}`] || { unusedGovernmentCents: 0, minimumSpendCents: 0, estimatedPayCents: 0, actualPaidCents: 0, hasMissingActual: false };
             const available = list.filter(coupon => !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type));
@@ -1178,7 +1205,7 @@
             const panelId = `wallet-panel-${MEMBERS.indexOf(member)}-${WALLETS.indexOf(payment)}`;
             const status = !list.length ? '未登記' : list.length < 3 ? `不完整 · ${list.length} 項` : list.length > 3 ? `歷史異常 · ${list.length} 項` : expired ? '已到期' : `${available.length} 張未用`;
             const txns = recordedTransactions(list);
-            return `<div class="flat-wallet"><button type="button" class="wallet-toggle" data-expand-wallet data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}" aria-expanded="${open}" aria-controls="${panelId}"><span><strong>${escapeHtml(payment)}</strong> <small>${status}</small></span><span>待用 ${money(row.unusedGovernmentCents)}<small>已付 ${actual(row, 'actualPaidCents')}</small></span><span aria-hidden="true">${open ? '−' : '＋'}</span></button><div id="${panelId}" class="wallet-expanded"${open ? '' : ' hidden'}><div class="wallet-figures"><p>最低購物額參考 <strong>${money(row.minimumSpendCents)}</strong></p><p>預計自付 <strong>${money(row.estimatedPayCents)}</strong></p><p>已記錄實際自付 <strong>${actual(row, 'actualPaidCents')}</strong></p></div><div class="flat-coupons">${list.length ? list.map(coupon => `<p>${escapeHtml(couponTypeName(coupon.type))} ${escapeHtml(couponName(coupon))} <strong>${coupon.used ? '已核銷' : expired ? '已過期' : '未使用'}</strong></p>`).join('') : '<p>本週尚未登記結果。</p>'}</div>${available.length && !expired ? `<div class="redemption-card"><span>核對這筆實際交易後儲存</span><button class="button" type="button" data-wallet-redemption data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">快速核銷</button></div>` : ''}${txns.length ? `<details class="wallet-history"><summary>交易記錄與更正</summary>${txns.map(transactionRecordMarkup).join('')}</details>` : ''}</div></div>`;
+            return `<div class="flat-wallet"><button type="button" class="wallet-toggle" data-expand-wallet data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}" aria-expanded="${open}" aria-controls="${panelId}"><span><strong>${escapeHtml(payment)}</strong> <small class="${list.length === 3 || expired ? '' : 'status-warn'}">${status}</small></span><span>待用 ${money(row.unusedGovernmentCents)}<small>已付 ${actual(row, 'actualPaidCents')}</small></span><span aria-hidden="true">${open ? '−' : '＋'}</span></button><div id="${panelId}" class="wallet-expanded"${open ? '' : ' hidden'}><div class="wallet-figures"><p>最低購物額參考 <strong>${money(row.minimumSpendCents)}</strong></p><p>預計自付 <strong>${money(row.estimatedPayCents)}</strong></p><p>已記錄實際自付 <strong>${actual(row, 'actualPaidCents')}</strong></p></div><div class="flat-coupons">${list.length ? list.map(coupon => `<p>${escapeHtml(couponTypeName(coupon.type))} ${escapeHtml(couponName(coupon))} <strong>${coupon.used ? '已核銷' : expired ? '已過期' : '未使用'}</strong></p>`).join('') : '<p>本週尚未登記結果。</p>'}</div>${list.length < 3 && !expired ? `<div class="redemption-card register-card"><span>${list.length ? '結果不完整，請到登記頁核對' : '抽獎後在此登記三次結果'}</span><button class="button" type="button" data-open-registration data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">前往登記</button></div>` : ''}${available.length && !expired ? `<div class="redemption-card"><span>核對這筆實際交易後儲存</span><button class="button" type="button" data-wallet-redemption data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">快速核銷</button></div>` : ''}${txns.length ? `<details class="wallet-history"><summary>交易記錄與更正</summary>${txns.map(transactionRecordMarkup).join('')}</details>` : ''}</div></div>`;
           }).join('') || '<p class="hint">尚未啟用支付方式</p>'}</details>`;
         }).join('');
         $('walletRedemptionCards').querySelectorAll('[data-member-group]').forEach(node => node.addEventListener('toggle', () => {
@@ -1371,18 +1398,69 @@
         $('funStatsNote').textContent = `${periodText}；圖表只計政府電子券，包含已用券。${completeness ? ` ${completeness}` : ''}`;
       }
 
+      function renderRegistrationProgress() {
+        const member = $('recordMember').value;
+        const payment = $('recordWallet').value;
+        const expired = isWeekExpired(currentWeek);
+        let total = 0, done = 0;
+        $('recordProgress').innerHTML = MEMBERS.map(name => {
+          const wallets = activeWallets(name);
+          const chips = wallets.map(wallet => {
+            const state = walletRegistrationState(name, wallet);
+            total++;
+            if (state.kind === 'done') done++;
+            const current = name === member && wallet === payment;
+            return `<button type="button" class="progress-chip is-${state.kind}" data-record-target data-member="${escapeHtml(name)}" data-payment="${escapeHtml(wallet)}" aria-pressed="${current}" aria-label="${escapeHtml(name)} ${escapeHtml(wallet)}：${escapeHtml(state.label)}"><span aria-hidden="true">${state.kind === 'done' ? '✓' : state.kind === 'none' ? '○' : '!'}</span>${escapeHtml(wallet)}</button>`;
+          }).join('');
+          return `<div class="progress-row"><strong>${escapeHtml(name)}</strong><div class="progress-chips">${chips || '<span class="hint">未啟用支付方式</span>'}</div></div>`;
+        }).join('');
+        $('recordProgressCount').textContent = total ? `${done}／${total} 個錢包已登記${expired ? ' · 已到期' : ''}` : '';
+        const pending = isWeekExpired(currentWeek) ? 0 : MEMBERS.reduce((sum, name) => sum + activeWallets(name).filter(wallet => walletRegistrationState(name, wallet).kind !== 'done').length, 0);
+        $('recordNavBadge').hidden = !pending;
+        $('recordNavBadge').textContent = pending ? String(pending) : '';
+        $('recordNavBadge').setAttribute('aria-label', pending ? `${pending} 個錢包未完成登記` : '');
+      }
+
+      function renderSaveDrawLabel() {
+        const picked = slotSelections.filter(value => value !== null).length;
+        const state = walletRegistrationState($('recordMember').value, $('recordWallet').value);
+        $('saveDraw').textContent = isWeekExpired(currentWeek)
+          ? '本週已到期，只供查閱'
+          : state.count
+            ? '此錢包已登記'
+            : picked === 3 ? '儲存三個結果' : `儲存三個結果（已選 ${picked}/3）`;
+      }
+
       function renderRegistrationStatus() {
+        renderRegistrationProgress();
         const member = $('recordMember').value;
         const payment = $('recordWallet').value;
         if (!member || !payment) {
           $('recordStatus').textContent = '此成員尚未在家庭支付設定啟用方式。';
           $('saveDraw').disabled = true;
+          $('recordExisting').hidden = true;
+          $('slots').hidden = false;
+          renderSaveDrawLabel();
           return;
         }
         const recordCount = Object.values(coupons).filter(coupon => coupon.member === member && coupon.payment === payment).length;
         const state = recordCount === 0 ? '未登記' : recordCount === 3 ? '已完成' : recordCount < 3 ? `不完整（${recordCount}/3）` : `歷史異常（${recordCount} 項）`;
-        $('recordStatus').textContent = `${member} · ${payment}：${state}。${isWeekExpired(currentWeek) ? '本週已到期，只供查閱。' : recordCount ? '已有結果不可覆蓋；如需重登，先在券庫核對並移除舊結果。' : '選齊三次結果才可整批儲存。'}`;
+        $('recordStatus').textContent = `${member} · ${payment}：${state}。${isWeekExpired(currentWeek) ? '本週已到期，只供查閱。' : recordCount ? '已有結果不會被覆蓋；如登記錯誤，可用下方「清除後重登」（已核銷的錢包需先復原核銷）。' : '選齊三次結果才可整批儲存。'}`;
         $('saveDraw').disabled = isWeekExpired(currentWeek) || recordCount > 0;
+        const existing = Object.entries(coupons).filter(([, coupon]) => coupon.member === member && coupon.payment === payment)
+          .map(([id, coupon]) => ({ ...coupon, id }))
+          .sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
+        const next = pendingRegistrations().find(item => !(item.member === member && item.payment === payment));
+        const canReregister = !isWeekExpired(currentWeek) && existing.length && existing.every(coupon => !coupon.used);
+        $('recordExisting').hidden = !existing.length;
+        $('slots').hidden = existing.length > 0;
+        $('recordExisting').innerHTML = existing.length ? `<p class="record-existing-title">已登記的結果</p>
+          <div class="record-existing-pills">${existing.map(coupon => resultPill(coupon)).join('')}</div>
+          <div class="record-existing-actions">
+            ${next ? `<button type="button" class="button" data-record-target data-member="${escapeHtml(next.member)}" data-payment="${escapeHtml(next.payment)}">下一個未登記：${escapeHtml(next.member)} · ${escapeHtml(next.payment)}</button>` : isWeekExpired(currentWeek) ? '' : '<span class="record-all-done">全家已登記完畢 🎉</span>'}
+            ${canReregister ? `<button type="button" class="button secondary" data-reregister data-member="${escapeHtml(member)}" data-payment="${escapeHtml(payment)}">登記錯了？清除後重登</button>` : ''}
+          </div>` : '';
+        renderSaveDrawLabel();
       }
 
       function renderWalletSettings() {
@@ -1421,14 +1499,10 @@
           const amountText = `MOP ${formatMop(totalCents / CENTS)}`;
           return hasUnrecorded ? (totalCents > 0 ? `${amountText} + 未記錄` : '未記錄') : amountText;
         };
-        $('actualSpendSummary').innerHTML = `<table class="actual-spend-table">
-          <thead><tr><th scope="col">家庭成員</th><th scope="col">實際自付</th></tr></thead>
-          <tbody>${MEMBERS.map(member => {
+        $('actualSpendSummary').innerHTML = `<dl class="spend-rows">${MEMBERS.map(member => {
             const spend = actualSpend.byMember[member];
-            return `<tr><th scope="row">${escapeHtml(member)}</th><td class="num">${spendLabel(spend?.actualPaidCents || 0, Boolean(spend?.hasMissingActual))}</td></tr>`;
-          }).join('')}</tbody>
-          <tfoot><tr><th scope="row">全家合計</th><td class="num">${spendLabel(actualSpend.actualPaidCents, actualSpend.hasMissingActual)}</td></tr></tfoot>
-        </table><p class="hint"><strong>非實際估算（不計入已記錄金額）</strong>：支出 MOP ${formatMop(missingEstimates.totalSpendCents / CENTS)} · 自付 MOP ${formatMop(missingEstimates.totalPaidCents / CENTS)}</p>`;
+            return `<div class="spend-row"><dt>${escapeHtml(member)}</dt><dd>${spendLabel(spend?.actualPaidCents || 0, Boolean(spend?.hasMissingActual))}</dd></div>`;
+          }).join('')}<div class="spend-row spend-total"><dt>全家合計</dt><dd>${spendLabel(actualSpend.actualPaidCents, actualSpend.hasMissingActual)}</dd></div></dl><p class="hint spend-estimate"><strong>非實際估算（不計入已記錄金額）</strong>：支出 MOP ${formatMop(missingEstimates.totalSpendCents / CENTS)} · 自付 MOP ${formatMop(missingEstimates.totalPaidCents / CENTS)}</p>`;
         const activeEntries = isWeekExpired(currentWeek) ? [] : entries;
         const unusedGovernment = activeEntries.filter(([, coupon]) => coupon.type === 'gov' && !coupon.used);
         const unusedAmount = unusedGovernment.reduce((sum, [, coupon]) => sum + coupon.amount, 0);
@@ -1470,7 +1544,7 @@
           groups.get(key).coupons.push(coupon);
         }
         $('couponList').innerHTML = [...groups.values()].map(group => `<section class="coupon-group">
-          <div class="coupon-group-heading"><h3>${escapeHtml(group.member)}／${escapeHtml(group.payment)}</h3><button class="button secondary small" type="button" data-wallet-plan data-member="${escapeHtml(group.member)}" data-payment="${escapeHtml(group.payment)}" aria-label="只用${escapeHtml(group.member)}／${escapeHtml(group.payment)}試算">只試算此錢包</button></div>
+          <div class="coupon-group-heading"><h3>${escapeHtml(group.member)}／${escapeHtml(group.payment)}</h3><div class="coupon-group-actions"><button class="button secondary small" type="button" data-wallet-plan data-member="${escapeHtml(group.member)}" data-payment="${escapeHtml(group.payment)}" aria-label="只用${escapeHtml(group.member)}／${escapeHtml(group.payment)}試算">只試算此錢包</button>${!isWeekExpired(currentWeek) && walletRecords(group.member, group.payment).every(coupon => !coupon.used) ? `<button class="text-button" type="button" data-reregister data-member="${escapeHtml(group.member)}" data-payment="${escapeHtml(group.payment)}">重新登記</button>` : ''}</div></div>
           ${group.coupons.map(coupon => couponRow(coupon)).join('')}
           ${vaultTransactionsMarkup(group)}
         </section>`).join('');
@@ -1510,7 +1584,7 @@
           </div>
           <div class="coupon-actions">
             ${actions}
-            ${isWeekExpired(currentWeek) ? '' : `<button class="button danger small" type="button" data-action="delete" data-id="${escapeHtml(coupon.id)}" aria-label="刪除${escapeHtml(coupon.member)} ${escapeHtml(coupon.payment)} 的${escapeHtml(couponName(coupon))}">刪除</button>`}
+            ${isWeekExpired(currentWeek) ? '' : `<button class="text-button delete-link" type="button" data-action="delete" data-id="${escapeHtml(coupon.id)}" aria-label="刪除${escapeHtml(coupon.member)} ${escapeHtml(coupon.payment)} 的${escapeHtml(couponName(coupon))}">移除</button>`}
           </div>
         </div>`;
       }
@@ -1532,6 +1606,7 @@
             <div class="slot-choices" role="group" aria-label="第 ${index + 1} 次抽獎結果">${choices.map(choice => `<button class="slot-choice" type="button" data-slot-index="${index}" data-result="${choice.value}" aria-label="${escapeHtml(choice.ariaLabel)}" aria-pressed="${selected === choice.value}">${escapeHtml(choice.label)}</button>`).join('')}</div>
           </section>`;
         }).join('');
+        renderSaveDrawLabel();
       }
 
       function availableMerchantCoupons(members = selectedCalcMembers, payments = selectedCalcPayments) {
@@ -2358,6 +2433,26 @@
         finally { $('saveCorrection').disabled = false; }
       }
 
+      function clearWalletForReregistration(member, payment) {
+        if (isWeekExpired(currentWeek)) { showToast('所選週已到期，只供查閱。'); return Promise.resolve(false); }
+        const ids = Object.entries(coupons).filter(([, coupon]) => coupon.member === member && coupon.payment === payment).map(([id]) => id);
+        if (!ids.length) { openRegistration(member, payment); return Promise.resolve(true); }
+        if (ids.some(id => coupons[id].used)) { showToast('此錢包已有核銷記錄，不能整批重登；請先復原核銷。'); return Promise.resolve(false); }
+        if (!window.confirm(`清除 ${member} · ${payment} 本週的 ${ids.length} 項結果，然後重新登記？建議先匯出備份。`)) return Promise.resolve(false);
+        const updates = {};
+        ids.forEach(id => { updates[`coupons/${id}`] = null; });
+        invalidateAllPeriodStats();
+        const finish = message => { openRegistration(member, payment); showToast(message); return true; };
+        const applyLocal = () => { ids.forEach(id => delete coupons[id]); saveLocal(); render(); };
+        if (online && database) {
+          return database.ref(weekPath()).update(updates)
+            .then(() => { ids.forEach(id => delete coupons[id]); render(); return finish('已清除舊結果，請重新選三次結果。'); })
+            .catch(() => { applyLocal(); return finish('雲端儲存失敗；清除只保存在此裝置，請先匯出備份。'); });
+        }
+        applyLocal();
+        return Promise.resolve(finish('已在此裝置清除舊結果，尚未同步雲端。'));
+      }
+
       function storeBatch(rows) {
         if (!Array.isArray(rows) || rows.length !== 3 || isWeekExpired(currentWeek) || isDrawn(rows[0].member, rows[0].payment)) {
           showToast('三項結果不完整、已有紀錄或週次已到期；未儲存。');
@@ -2728,12 +2823,23 @@
         const undo = event.target.closest('[data-undo-transaction]');
         if (undo) { undoTransaction(undo.dataset.member, undo.dataset.payment, undo.dataset.undoTransaction); return; }
         if (correction) { openCorrection(correction.dataset.member, correction.dataset.payment, correction.dataset.correctTransaction); return; }
+        const register = event.target.closest('[data-open-registration]');
+        if (register) { openRegistration(register.dataset.member, register.dataset.payment); return; }
         const button = event.target.closest('[data-wallet-redemption]');
         if (!button) return;
         openWalletRedemption(button.dataset.member, button.dataset.payment);
       });
       $('memberCompare').addEventListener('click', event => {
-        if (event.target.closest('[data-open-registration]')) setActivePanel('record');
+        if (event.target.closest('[data-open-registration]')) {
+          const next = pendingRegistrations()[0];
+          openRegistration(next?.member, next?.payment);
+        }
+      });
+      $('record').addEventListener('click', event => {
+        const reregister = event.target.closest('[data-reregister]');
+        if (reregister) { clearWalletForReregistration(reregister.dataset.member, reregister.dataset.payment); return; }
+        const target = event.target.closest('[data-record-target]');
+        if (target) openRegistration(target.dataset.member, target.dataset.payment);
       });
       $('useCouponsResults').addEventListener('click', event => {
         const button = event.target.closest('[data-wallet-redemption]');
@@ -2759,6 +2865,8 @@
         if (undo) { undoTransaction(undo.dataset.member, undo.dataset.payment, undo.dataset.undoTransaction); return; }
         const correction = event.target.closest('[data-correct-transaction]');
         if (correction) { openCorrection(correction.dataset.member, correction.dataset.payment, correction.dataset.correctTransaction); return; }
+        const reregister = event.target.closest('[data-reregister]');
+        if (reregister) { clearWalletForReregistration(reregister.dataset.member, reregister.dataset.payment); return; }
         const walletPlan = event.target.closest('[data-wallet-plan]');
         if (walletPlan) {
           selectedCalcMembers = [walletPlan.dataset.member];

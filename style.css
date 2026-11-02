@@ -872,3 +872,52 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
 .vault-transactions [data-undo-transaction] { min-height: 44px; font-weight: 700; }
 .undo-transaction { min-width: 0; overflow-wrap: anywhere; }
 .undo-warning { display: block; line-height: 1.5; }
+
+/* v4.15 — registration progress, nudges and calmer vault */
+.record-progress { margin: 12px 0 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 13px; background: #f8fafc; }
+.record-progress-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.record-progress-head h3 { margin: 0; color: var(--pine-950); font-size: 16px; font-weight: 850; }
+.record-progress-count { color: var(--muted); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.record-progress-grid { display: grid; gap: 6px; }
+.progress-row { display: grid; grid-template-columns: 3.4em minmax(0,1fr); align-items: center; gap: 8px; }
+.progress-row > strong { color: var(--pine-950); font-size: 14px; }
+.progress-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.progress-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; }
+.progress-chip span { font-size: 12px; }
+.progress-chip.is-done { border-color: #cfe3d6; background: #eef7f1; color: #2f6b4a; }
+.progress-chip.is-none { border-style: dashed; color: var(--muted); }
+.progress-chip.is-partial, .progress-chip.is-anomaly { border-color: #eed5d0; background: var(--danger-soft); color: var(--danger); }
+.progress-chip[aria-pressed="true"] { outline: 2px solid var(--pine-700); outline-offset: 1px; }
+.record-existing { margin: 10px 0 14px; padding: 14px; border: 1px solid #cfe3d6; border-radius: 13px; background: #f3f9f5; }
+.record-existing[hidden], #slots[hidden], .nav-badge[hidden] { display: none; }
+.record-existing-title { margin: 0 0 8px; color: var(--pine-950); font-weight: 850; }
+.record-existing-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.record-existing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.record-all-done { color: #2f6b4a; font-weight: 800; }
+.bottom-nav .button { position: relative; }
+.nav-badge { position: absolute; top: 4px; right: 6px; display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 99px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; line-height: 1; }
+.pending-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 99px; background: var(--danger-soft); color: var(--danger); font-size: 12px; font-style: normal; font-weight: 750; vertical-align: middle; }
+.wallet-toggle small.status-warn { color: var(--danger); font-weight: 700; }
+.register-card { border-style: dashed; }
+.actual-spend-list { border: 1px solid #dce3da; border-radius: 10px; background: var(--card); overflow: hidden; }
+.spend-rows { margin: 0; }
+.spend-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; padding: 10px 12px; border-bottom: 1px solid #e7ebe4; }
+.spend-row dt { color: var(--pine-950); font-weight: 800; }
+.spend-row dd { margin: 0; margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.spend-total { border-bottom: 0; background: var(--pine-950); }
+.spend-total dt, .spend-total dd { color: #fffdf6; }
+.spend-estimate { margin: 9px 0 0; }
+.inline-help { margin-top: 8px; }
+.inline-help > summary { width: max-content; min-height: 36px; padding: 6px 0; color: var(--pine-900); font-size: 14px; font-weight: 750; cursor: pointer; }
+.inline-help .hint { margin: 0; }
+.coupon-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.delete-link { background: transparent; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.delete-link:hover, .delete-link:focus-visible { background: var(--danger-soft); color: var(--danger); }
+.calc-filters summary { flex-wrap: wrap; }
+.calc-filters summary span { white-space: nowrap; }
+@media (max-width: 620px) {
+  .calc-filters summary span { margin-left: 0; flex-basis: 100%; order: 3; }
+  .calc-filters summary::after { order: 2; margin-left: auto; }
+}
+.bottom-nav .button[aria-current="page"]:hover:not(:disabled) { border-color: var(--pine-950); background: var(--pine-950); color: #fffefa; }
+.bottom-nav .button[aria-current="page"] .nav-badge { box-shadow: 0 0 0 2px var(--pine-900); }

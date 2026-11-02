@@ -6,6 +6,7 @@ python3 tests/browser_smoke.py
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import os
 
 from playwright.sync_api import sync_playwright
 
@@ -44,7 +45,11 @@ def open_dad_history(page):
 
 
 with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(headless=True, executable_path='/usr/bin/chromium', args=['--no-sandbox'])
+    chromium_path = os.environ.get('CHROMIUM_PATH') or ('/usr/bin/chromium' if Path('/usr/bin/chromium').exists() else None)
+    launch_options = {'headless': True, 'args': ['--no-sandbox']}
+    if chromium_path:
+        launch_options['executable_path'] = chromium_path
+    browser = playwright.chromium.launch(**launch_options)
     page, errors = page_for(browser)
     assert page.locator('#week').input_value() == '2026R2-W1'
     home = page.locator('#memberCompare').inner_text()
@@ -180,10 +185,56 @@ with sync_playwright() as playwright:
     print('write failure and offline local-only status PASS')
     failed.close()
 
+    flow, errors = page_for(browser)
+    # Registration progress, jump-to-register and one-step re-registration.
+    badge = flow.locator('#recordNavBadge')
+    assert badge.is_visible() and int(badge.inner_text()) > 0
+    flow.locator('[data-member-group="媽媽"] > summary').click()
+    flow.locator('[data-expand-wallet][data-member="媽媽"][data-payment="工銀"]').click()
+    flow.locator('#walletRedemptionCards [data-open-registration][data-member="媽媽"][data-payment="工銀"]').click()
+    assert flow.locator('#record').is_visible()
+    assert flow.locator('#recordMember').input_value() == '媽媽'
+    assert flow.locator('#recordWallet').input_value() == '工銀'
+    assert '已選 0/3' in flow.locator('#saveDraw').inner_text()
+    flow.locator('[data-record-target][data-member="爸爸"][data-payment="MPay"]').first.click()
+    assert flow.locator('#recordWallet').input_value() == 'MPay'
+    assert flow.locator('#slots').is_hidden()
+    assert '電子 MOP 20' in flow.locator('#recordExisting').inner_text()
+    assert flow.locator('#saveDraw').is_disabled()
+    before = int(badge.inner_text())
+    flow.once('dialog', lambda dialog: dialog.dismiss())
+    flow.locator('#recordExisting [data-reregister]').click()
+    assert write_count(flow) == 0
+    flow.once('dialog', lambda dialog: dialog.accept())
+    flow.locator('#recordExisting [data-reregister]').click()
+    flow.wait_for_function("document.querySelector('#toast').textContent.includes('重新選三次結果')")
+    assert write_count(flow) == 1
+    assert flow.evaluate("Object.values(window.__fake.writes[0].changes).every(value => value === null)")
+    assert len(flow.evaluate("Object.keys(window.__fake.writes[0].changes)")) == 3
+    assert flow.locator('#slots').is_visible()
+    assert not flow.locator('#saveDraw').is_disabled()
+    assert int(badge.inner_text()) == before + 1
+    for index, result in enumerate(('50', 'gift', 'zero')):
+        flow.locator(f'[data-slot-index="{index}"][data-result="{result}"]').click()
+    assert flow.locator('#saveDraw').inner_text() == '儲存三個結果'
+    flow.locator('#saveDraw').click()
+    assert write_count(flow) == 2
+    assert int(badge.inner_text()) == before
+    assert '下一個未登記' in flow.locator('#recordExisting').inner_text()
+    # Wallets with a redeemed coupon cannot be wiped in one step.
+    flow.locator('[data-nav="home"]').click()
+    assert flow.locator('#couponList [data-reregister][data-member="媽媽"]').count() == 0
+    assert flow.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert not errors, errors
+    print('registration progress, jump-to-register and re-registration PASS')
+    flow.close()
+
     expired, errors = page_for(browser, now=datetime(2026, 10, 30, 12, tzinfo=timezone.utc))
     expired.locator('#week').select_option('2026R2-W1')
     expired.locator('[data-nav="record"]').click()
     assert expired.locator('#saveDraw').is_disabled()
+    assert expired.locator('#recordNavBadge').is_hidden()
+    assert expired.locator('[data-reregister]').count() == 0
     expired.locator('[data-nav="overview"]').click()
     assert expired.locator('#walletRedemptionCards [data-wallet-redemption]').count() == 0
     assert 'MOP 0' in expired.locator('#memberCompare').inner_text()

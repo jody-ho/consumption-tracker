@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#19594c">
-  <meta name="application-version" content="4.14.0">
+  <meta name="application-version" content="4.15.0">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.14.0">
+  <link rel="stylesheet" href="./style.css?v=4.15.0">
 </head>
 <body>
   <header class="hero">
@@ -147,6 +147,10 @@
       <article class="card">
         <h2>登記三個抽獎結果</h2>
         <p class="lead">先選家人和支付方式，再為三列各自選已開獎結果；結果未齊時先不儲存。每個錢包每週最多 3 次。</p>
+        <section class="record-progress" aria-labelledby="recordProgressHeading">
+          <div class="record-progress-head"><h3 id="recordProgressHeading">本週登記進度</h3><span id="recordProgressCount" class="record-progress-count"></span></div>
+          <div id="recordProgress" class="record-progress-grid" role="group" aria-label="各家人錢包登記狀態，點選即可切換"></div>
+        </section>
         <div class="record-targets">
           <div class="field">
             <label for="recordMember">家庭成員</label>
@@ -158,9 +162,10 @@
           </div>
         </div>
         <div id="recordStatus" class="statusline" aria-live="polite"></div>
+        <div id="recordExisting" class="record-existing" hidden></div>
         <div id="slots" class="slot-list"></div>
         <button id="saveDraw" class="button full" type="button">儲存三個結果</button>
-        <p class="hint">活動資格、用券順序與到期日請查看上方「查看規則」。</p>
+        <p class="hint">活動資格、用券順序與到期日請查看上方「活動規則」。</p>
       </article>
     </section>
 
@@ -170,8 +175,8 @@
         <p class="lead">本週券已按家人與支付方式分組；可篩選狀態。</p>
         <section class="actual-spend-summary" aria-labelledby="actualSpendHeading">
           <h3 id="actualSpendHeading">本週實際自付（已記錄）</h3>
-          <p class="hint">只計核銷時記錄的實付；同一交易多張券只計一次。舊紀錄缺金額會顯示「未記錄」。另列的非實際估算只依明確連結交易的政府券面額計算：支出 3 倍、自付 2 倍；排除商戶券及禮遇券，不覆蓋實際值，且不計入已記錄合計。缺少交易識別的舊紀錄不推估。</p>
-          <div id="actualSpendSummary" class="actual-spend-scroll" role="region" aria-label="按家庭成員及全家合計的本週實際自付" tabindex="0"></div>
+          <div id="actualSpendSummary" class="actual-spend-list" role="region" aria-label="按家庭成員及全家合計的本週實際自付"></div>
+          <details class="inline-help"><summary>計算說明</summary><p class="hint">只計核銷時記錄的實付；同一交易多張券只計一次。舊紀錄缺金額會顯示「未記錄」。另列的非實際估算只依明確連結交易的政府券面額計算：支出 3 倍、自付 2 倍；排除商戶券及禮遇券，不覆蓋實際值，且不計入已記錄合計。缺少交易識別的舊紀錄不推估。</p></details>
         </section>
         <div id="stats" class="stats" aria-live="polite"></div>
         <details class="weekly-details fun-details">
@@ -227,13 +232,13 @@
       </details>
     </section>
 
-    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.14.0</small></footer>
+    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.15.0</small></footer>
   </main>
 
   <nav class="bottom-nav" aria-label="主要導覽">
     <button class="button secondary" data-nav="overview" type="button" aria-current="page">首頁</button>
     <button class="button secondary" data-nav="calc" type="button">試算</button>
-    <button class="button secondary" data-nav="record" type="button">登記</button>
+    <button class="button secondary" data-nav="record" type="button">登記<span id="recordNavBadge" class="nav-badge" hidden></span></button>
     <button class="button secondary" data-nav="home" type="button">券庫</button>
   </nav>
   <dialog id="redeemDialog" class="redeem-dialog" aria-labelledby="redeemDialogTitle">
@@ -281,6 +286,6 @@
     </form>
   </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=4.14.0"></script>
+  <script src="./script.js?v=4.15.0"></script>
 </body>
 </html>
