@@ -857,6 +857,8 @@
       let selectedCalcPayments = [...WALLETS];
       let selectedVaultMembers = [...MEMBERS];
       let slotSelections = [null, null, null];
+      let savedNotice = null;
+      let savedNoticeTimer = null;
       let allPeriodData = null;
       let allPeriodStatsLoading = false;
       let allPeriodStatsError = '';
@@ -947,14 +949,67 @@
           .map(payment => ({ member, payment })));
       }
 
-      function openRegistration(member, payment) {
-        if (member && MEMBERS.includes(member)) {
+      function openRegistration(member, payment, options = {}) {
+        if (!options.keepNotice) clearSavedNotice();
+        const switching = Boolean(member && MEMBERS.includes(member));
+        if (switching) {
           $('recordMember').value = member;
           setWalletOptions('recordWallet', member, payment);
           resetDrawResults();
         }
         renderRegistrationStatus();
-        setActivePanel('record');
+        if (!$('record').classList.contains('active')) setActivePanel('record', { keepScroll: switching });
+        if (switching) {
+          $('recordProgressBox').open = false;
+          const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          requestAnimationFrame(() => $('recordStatus').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' }));
+        }
+      }
+
+      function clearSavedNotice() {
+        clearInterval(savedNoticeTimer);
+        savedNoticeTimer = null;
+        savedNotice = null;
+        $('recordSaved').hidden = true;
+        $('recordSaved').innerHTML = '';
+      }
+
+      function showSavedNotice(member, payment, rows, local) {
+        clearInterval(savedNoticeTimer);
+        const next = pendingRegistrations()[0] || null;
+        savedNotice = { member, payment, next, seconds: next ? 4 : 0 };
+        const pills = rows.map(row => resultPill(row)).join('');
+        const paint = () => {
+          const n = savedNotice;
+          if (!n) return;
+          $('recordSaved').hidden = false;
+          $('recordSaved').innerHTML = `<p class="record-saved-title">✓ 已儲存成功${local ? '（只在此裝置）' : ''}</p>
+            <p class="record-saved-target">${escapeHtml(member)} · ${escapeHtml(payment)}</p>
+            <div class="record-existing-pills">${pills}</div>
+            ${n.next ? `<p class="record-saved-next">${n.seconds > 0 ? `${n.seconds} 秒後轉到下一個：` : '下一個：'}<strong>${escapeHtml(n.next.member)} · ${escapeHtml(n.next.payment)}</strong></p>
+              <div class="record-existing-actions"><button type="button" class="button" data-record-target data-member="${escapeHtml(n.next.member)}" data-payment="${escapeHtml(n.next.payment)}">現在就去</button>${n.seconds > 0 ? '<button type="button" class="button secondary" data-stay-here>留在這裡</button>' : ''}</div>`
+              : '<p class="record-saved-next"><strong>全家本週已登記完畢 🎉</strong></p>'}`;
+        };
+        paint();
+        renderRegistrationStatus();
+        const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if ($('record').classList.contains('active')) $('recordSaved').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+        if (!next) return;
+        savedNoticeTimer = setInterval(() => {
+          if (!savedNotice) { clearInterval(savedNoticeTimer); return; }
+          savedNotice.seconds -= 1;
+          if (savedNotice.seconds <= 0) {
+            clearInterval(savedNoticeTimer);
+            savedNoticeTimer = null;
+            const target = savedNotice.next;
+            if ($('record').classList.contains('active')) openRegistration(target.member, target.payment, { keepNotice: true });
+            savedNotice.seconds = 0;
+            savedNotice.arrived = true;
+            $('recordSaved').innerHTML = `<p class="record-saved-title">✓ 上一個已儲存：${escapeHtml(member)} · ${escapeHtml(payment)}</p><p class="record-saved-next">現在登記：<strong>${escapeHtml(target.member)} · ${escapeHtml(target.payment)}</strong></p>`;
+            return;
+          }
+          paint();
+        }, 1000);
       }
 
       function activeWallets(member) {
@@ -1180,6 +1235,36 @@
         return totals;
       }
 
+      function daysUntilWeekEnd() {
+        const week = WEEKS.find(item => item.key === currentWeek);
+        if (!week || isWeekExpired(currentWeek)) return null;
+        const end = new Date(`${localDateKey(week.end)}T00:00:00Z`);
+        const today = new Date(`${ConsumeCalc.macauDateKey()}T00:00:00Z`);
+        return Math.round((end - today) / 86400000);
+      }
+
+      function unusedWalletsMarkup(rows) {
+        if (isWeekExpired(currentWeek)) return '';
+        const wallets = [];
+        for (const member of MEMBERS) for (const payment of WALLETS) {
+          const list = rows.filter(coupon => coupon.member === member && coupon.payment === payment && !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type));
+          if (!list.length) continue;
+          const govCents = list.filter(c => c.type === 'gov').reduce((sum, c) => sum + toCents(c.amount), 0);
+          const parts = [govCents ? `電子券 MOP ${formatMop(govCents / CENTS)}` : '', list.some(c => c.type === 'merchant') ? '商戶券' : '', list.some(c => c.type === 'gift') ? '禮遇券' : ''].filter(Boolean);
+          wallets.push({ member, payment, govCents, parts });
+        }
+        if (!wallets.length) return '';
+        const days = daysUntilWeekEnd();
+        const total = wallets.reduce((sum, w) => sum + w.govCents, 0);
+        const urgent = days !== null && days <= 1;
+        const when = days === null ? '' : days <= 0 ? '今晚 23:59 到期' : days === 1 ? '明晚 23:59 到期' : `還有 ${days} 天到期`;
+        return `<section class="dashboard-block unused-list-block${urgent ? ' is-urgent' : ''}" aria-label="還沒用的券">
+          <div class="dashboard-block-head"><span class="dashboard-kicker">${urgent ? '⚠ 快到期' : '待用'}</span><h3>還沒用的券</h3><span class="drawn-progress">${escapeHtml(when)}</span></div>
+          ${urgent ? `<p class="urgent-line">${days <= 0 ? '今晚' : '明晚'} 23:59 後失效：還有 <strong>MOP ${formatMop(total / CENTS)}</strong> 電子券未用${wallets.some(w => !w.govCents) ? '，另有商戶券／禮遇券' : ''}。</p>` : ''}
+          <ul class="unused-wallets">${wallets.map(w => `<li><span><strong>${escapeHtml(w.member)} · ${escapeHtml(w.payment)}</strong><small>${escapeHtml(w.parts.join(' + '))}</small></span><button class="button small" type="button" data-wallet-redemption data-member="${escapeHtml(w.member)}" data-payment="${escapeHtml(w.payment)}" aria-label="核銷 ${escapeHtml(w.member)} ${escapeHtml(w.payment)} 的券">核銷</button></li>`).join('')}</ul>
+        </section>`;
+      }
+
       function drawnSummaryMarkup(rows) {
         const totals = drawnTotals(rows);
         const money = cents => `MOP ${formatMop(cents / CENTS)}`;
@@ -1213,7 +1298,7 @@
         $('memberCompare').innerHTML = !summary.hasResults
           ? `<div class="empty dashboard-empty"><strong>本週尚無登記結果</strong><p>登記完整三次抽獎結果後，可在此查看待用券與實際消費。</p><button class="button" type="button" data-open-registration>前往登記</button></div>`
           : `<div class="dashboard-sections">
-              ${drawnSummaryMarkup(all)}
+              ${(() => { const days = daysUntilWeekEnd(); const unused = unusedWalletsMarkup(all); return days !== null && days <= 1 ? unused + drawnSummaryMarkup(all) : drawnSummaryMarkup(all) + unused; })()}
               <section class="dashboard-block unused-block" aria-label="未使用的券">
                 <div class="dashboard-block-head"><span class="dashboard-kicker">消費前</span><h3>未使用的券</h3></div>
                 <p class="dashboard-main"><span>政府電子券面額</span><strong>${money(summary.unusedGovernmentCents)}</strong></p>
@@ -1260,7 +1345,7 @@
         }
         if (coupon.type === 'merchant') return `<span class="result-pill merchant-pill ${stateClass}">商戶 100−12 · ${status}</span>`;
         if (coupon.type === 'gift') return `<span class="result-pill gift-pill ${stateClass}">消費禮遇券 · ${status}</span>`;
-        return '<span class="result-pill zero-pill">無券結果（舊記錄）</span>';
+        return '<span class="result-pill zero-pill">未抽中</span>';
       }
 
       function renderWalletSpendPlans() {
@@ -1488,7 +1573,8 @@
           .sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
         const next = pendingRegistrations().find(item => !(item.member === member && item.payment === payment));
         const canReregister = !isWeekExpired(currentWeek) && existing.length && existing.every(coupon => !coupon.used);
-        $('recordExisting').hidden = !existing.length;
+        const justSaved = savedNotice && !savedNotice.arrived && savedNotice.member === member && savedNotice.payment === payment;
+        $('recordExisting').hidden = !existing.length || justSaved;
         $('slots').hidden = existing.length > 0;
         $('recordExisting').innerHTML = existing.length ? `<p class="record-existing-title">已登記的結果</p>
           <div class="record-existing-pills">${existing.map(coupon => resultPill(coupon)).join('')}</div>
@@ -1513,7 +1599,7 @@
         if (type === 'gov') return '政府電子優惠';
         if (type === 'merchant') return '商戶滿減券';
         if (type === 'gift') return '消費禮遇券';
-        if (type === 'zero') return '舊期無券記錄';
+        if (type === 'zero') return '抽獎結果';
         return '未識別結果';
       }
 
@@ -1521,7 +1607,7 @@
         if (coupon.type === 'gov') return `MOP ${formatMop(coupon.amount)}`;
         if (coupon.type === 'merchant') return '消費滿 MOP 100 減 MOP 12';
         if (coupon.type === 'gift') return String(coupon.label || '消費禮遇券');
-        return '無券結果（舊記錄）';
+        return '未抽中';
       }
 
       function renderCouponVault() {
@@ -2003,33 +2089,48 @@
           prefillPayCents: options.prefillPayCents ?? null,
           preselectedIds: [...preselectedIds]
         };
-        $('walletRedeemTitle').textContent = options.scenarioTitle
-          ? `${options.scenarioTitle} · ${member} · ${payment}`
-          : `直接核銷 · ${member} · ${payment}`;
-        $('walletRedeemIntro').textContent = options.scenarioTitle
-          ? `已依此方案預選用券；最低原始消費額參考 MOP ${formatMop((options.minimumGrossSpendCents || 0) / CENTS)}。請按實際交易記錄核對實付；最後確認前不會改變券狀態。`
-          : '勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。下一步會按券面額自動填入支出與實付，可再修改。';
-        $('walletRedeemChoices').innerHTML = candidates.map(coupon => {
-          const label = coupon.type === 'gov' ? `政府電子優惠 MOP ${formatMop(coupon.amount)}`
-            : coupon.type === 'merchant' ? '商戶滿 MOP 100 減 MOP 12'
+        renderRedemptionPicker();
+        refreshMergedRedemption(true);
+      }
+
+      function renderRedemptionPicker() {
+        const context = pendingWalletRedemption;
+        const preselected = new Set(context.preselectedIds);
+        $('redeemCouponPicker').hidden = false;
+        $('redeemCouponPicker').innerHTML = `<legend>本次使用的券 <small>政府券可多張；商戶券每單 1 張</small></legend>${context.candidates.map(coupon => {
+          const label = coupon.type === 'gov' ? `政府電子券 MOP ${formatMop(coupon.amount)}`
+            : coupon.type === 'merchant' ? '商戶券 滿 100 減 12'
               : String(coupon.label || '消費禮遇券');
-          const checked = preselectedIds.has(coupon.id) ? ' checked' : '';
-          return `<label class="wallet-redeem-option"><input type="checkbox" data-wallet-coupon="${escapeHtml(coupon.id)}"${checked}><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(couponTypeName(coupon.type))} · ${escapeHtml(coupon.member)}／${escapeHtml(coupon.payment)}</small></span></label>`;
-        }).join('');
-        $('walletRedeemStatus').className = 'notice neutral';
-        $('walletRedeemStatus').textContent = '請勾選本次要用的券；未勾選的券會保留。';
+          return `<label class="wallet-redeem-option"><input type="checkbox" data-wallet-coupon="${escapeHtml(coupon.id)}"${preselected.has(coupon.id) ? ' checked' : ''}><span><strong>${escapeHtml(label)}</strong></span></label>`;
+        }).join('')}`;
+      }
+
+      function refreshMergedRedemption(initial = false) {
+        const context = pendingWalletRedemption;
+        if (!context) return;
         const selection = updateWalletRedemptionSelection();
-        $('continueWalletRedeem').disabled = !selection.valid;
-        $('walletRedeemDialog').showModal();
-        ($('walletRedeemChoices').querySelector('[data-wallet-coupon]:checked') || $('walletRedeemChoices').querySelector('[data-wallet-coupon]'))?.focus({ preventScroll: true });
+        const couponIds = selection.selected.map(coupon => coupon.id);
+        const samePlan = context.minimumGrossSpendCents !== null && couponIds.length === context.preselectedIds.length && couponIds.every(id => context.preselectedIds.includes(id));
+        const transaction = { member: context.member, payment: context.payment, couponIds, pay: null, planSpendCents: samePlan ? context.minimumGrossSpendCents : null };
+        $('redeemDialogTitle').textContent = `${context.scenarioTitle ? `${context.scenarioTitle} · ` : ''}核銷 · ${context.member} · ${context.payment}`;
+        if (!selection.valid) {
+          pendingRedemption = null;
+          $('redeemTransactions').innerHTML = '';
+          $('redeemValidation').innerHTML = `<p>${escapeHtml($('walletRedeemStatus').textContent)}</p>`;
+          $('redeemValidation').classList.add('invalid');
+          $('confirmRedemption').disabled = true;
+          return;
+        }
+        openRedemptionDialog(couponIds, [transaction], { keepDate: !initial });
+        $('redeemDialogTitle').textContent = `${context.scenarioTitle ? `${context.scenarioTitle} · ` : ''}核銷 · ${context.member} · ${context.payment}`;
       }
 
       function updateWalletRedemptionSelection() {
         if (!pendingWalletRedemption) return { valid: false, selected: [] };
-        const selectedIds = new Set([...$('walletRedeemChoices').querySelectorAll('[data-wallet-coupon]:checked')].map(input => input.dataset.walletCoupon));
+        const selectedIds = new Set([...$('redeemCouponPicker').querySelectorAll('[data-wallet-coupon]:checked')].map(input => input.dataset.walletCoupon));
         const selected = pendingWalletRedemption.candidates.filter(coupon => selectedIds.has(coupon.id));
         const merchantCount = selected.filter(coupon => coupon.type === 'merchant').length;
-        for (const input of $('walletRedeemChoices').querySelectorAll('[data-wallet-coupon]')) {
+        for (const input of $('redeemCouponPicker').querySelectorAll('[data-wallet-coupon]')) {
           const coupon = pendingWalletRedemption.candidates.find(row => row.id === input.dataset.walletCoupon);
           input.disabled = Boolean(coupon?.type === 'merchant' && merchantCount >= 1 && !input.checked);
         }
@@ -2041,39 +2142,14 @@
           : selected.length
             ? `已選 ${selected.length} 張：${selected.map(coupon => couponName(coupon)).join('、')}。下一步核對實際交易日期、支出與實付。`
             : '請勾選本次同一筆交易要使用的券；未勾選的券會保留。';
-        $('continueWalletRedeem').disabled = !valid;
         return { valid, selected };
-      }
-
-      function continueWalletRedemption(event) {
-        event.preventDefault();
-        const selection = updateWalletRedemptionSelection();
-        if (!selection.valid || !pendingWalletRedemption) return;
-        const context = pendingWalletRedemption;
-        const { member, payment } = context;
-        const couponIds = selection.selected.map(coupon => coupon.id);
-        const transaction = {
-          member,
-          payment,
-          couponIds,
-          governmentCoupons: selection.selected.filter(coupon => coupon.type === 'gov'),
-          pay: null,
-          planSpendCents: context.minimumGrossSpendCents !== null && couponIds.length === context.preselectedIds.length && couponIds.every(id => context.preselectedIds.includes(id))
-            ? context.minimumGrossSpendCents
-            : null
-        };
-        walletPlanTransitioning = Boolean(walletPlanReturnFocus);
-        $('walletRedeemDialog').close();
-        pendingWalletRedemption = null;
-        openRedemptionDialog(couponIds, [transaction]);
-        walletPlanTransitioning = false;
       }
 
       function formatInputCents(cents) {
         return (cents / CENTS).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
       }
 
-      function openRedemptionDialog(couponIds, transactions) {
+      function openRedemptionDialog(couponIds, transactions, options = {}) {
         if (isWeekExpired(currentWeek)) {
           showToast('所選週已過期，不能新增核銷記錄。');
           return;
@@ -2119,9 +2195,9 @@
 
         pendingRedemption = { ids, transactions: normalized, week: currentWeek };
         $('redeemDialogTitle').textContent = '確認核銷';
-        $('redeemDialogHint').textContent = '已按所用券的面額自動填入支出（優惠前）與實付；如實際交易金額不同，請按支付平台紀錄修改。改支出時實付會自動跟著計算。';
+        $('redeemDialogHint').textContent = '勾選這次用的券，金額會按券面額自動填好；如與支付平台紀錄不同再修改。';
         $('redeemDateField').hidden = false;
-        $('redeemDate').value = redemptionDateInputValue();
+        if (!options.keepDate || !$('redeemDate').value) $('redeemDate').value = redemptionDateInputValue();
         $('redeemTransactions').innerHTML = normalized.map(transaction => {
           const amountId = `redeemAmount-${transaction.index}`;
           const merchantCoupons = transaction.coupons.filter(coupon => coupon.type === 'merchant');
@@ -2173,9 +2249,10 @@
         }).join('');
         $('redeemValidation').innerHTML = '';
         $('redeemValidation').classList.remove('invalid');
-        $('redeemDialog').showModal();
+        const wasOpen = $('redeemDialog').open;
+        if (!wasOpen) $('redeemDialog').showModal();
         validateRedemptionForm();
-        $('redeemValidation').focus({ preventScroll: true });
+        if (!wasOpen) ($('redeemCouponPicker').hidden ? $('redeemValidation') : $('confirmRedemption')).focus({ preventScroll: true });
       }
 
       function redemptionReviewEntryMarkup(transaction, paidCents, check, merchantCount) {
@@ -2248,9 +2325,9 @@
           }
           if (spend !== null && (!Number.isInteger(spend) || spend < minimum)) failures.push(`${t.member}／${t.payment}：優惠前支出至少 MOP ${formatMop(minimum / CENTS)}。`);
           if (spend !== null && paid !== null && paid > spend) failures.push('實付不可大於優惠前支出。');
-          summaries.push(`<section class="redeem-review-entry"><strong>${escapeHtml(t.member)}／${escapeHtml(t.payment)}</strong><p>${t.coupons.map(c => escapeHtml(couponName(c))).join('、')}</p><p>用券最低支出估算 MOP ${formatMop(minimum / CENTS)}／估算實付 MOP ${formatMop(estimatePaid / CENTS)}</p><p>請確認為本筆實際金額：支出 ${spend === null ? '待填' : `MOP ${formatMop(spend / CENTS)}`} · 實付 ${paid === null ? '待填' : `MOP ${formatMop(paid / CENTS)}`}</p></section>`);
+          summaries.push(`<p class="redeem-summary-line">用 ${t.coupons.map(c => escapeHtml(couponName(c))).join('、')} · 支出 <strong>${spend === null ? '待填' : `MOP ${formatMop(spend / CENTS)}`}</strong> · 實付 <strong>${paid === null ? '待填' : `MOP ${formatMop(paid / CENTS)}`}</strong></p>`);
         }
-        $('redeemValidation').innerHTML = summaries.join('') + `<p>${escapeHtml(failures.join(' ') || '確認即記錄上述實際金額及已選券；取消不會更改資料。')}</p>`;
+        $('redeemValidation').innerHTML = summaries.join('') + (failures.length ? `<p>${escapeHtml([...new Set(failures)].join(' '))}</p>` : '');
         $('redeemValidation').classList.toggle('invalid', failures.length > 0);
         $('confirmRedemption').disabled = failures.length > 0;
         return { valid: failures.length === 0, amounts, spends, estimates };
@@ -2526,18 +2603,21 @@
               resetDrawResults();
               showToast('三個抽獎結果已一起儲存。');
               render();
+              showSavedNotice(rows[0].member, rows[0].payment, rows, false);
             })
             .catch(() => {
               saveLocal();
               resetDrawResults();
               render();
               showToast('雲端儲存失敗；結果只保存在此裝置，請先匯出備份。');
+              showSavedNotice(rows[0].member, rows[0].payment, rows, true);
             });
         }
         saveLocal();
         resetDrawResults();
         render();
         showToast('三個結果已保存在此裝置；連線後請確認是否需共用。');
+        showSavedNotice(rows[0].member, rows[0].payment, rows, true);
         return Promise.resolve();
       }
 
@@ -2629,7 +2709,7 @@
         }
       }
 
-      function setActivePanel(panelId) {
+      function setActivePanel(panelId, options = {}) {
         document.querySelectorAll('[data-nav]').forEach(button => {
           if (button.dataset.nav === panelId) button.setAttribute('aria-current', 'page');
           else button.removeAttribute('aria-current');
@@ -2640,7 +2720,7 @@
           panel.hidden = !selected;
         });
         const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+        if (!options.keepScroll) window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
       }
 
       function currentMacauDate() {
@@ -2678,6 +2758,142 @@
         return WEEKS[index].key;
       }
 
+      const devicesPath = 'access/devices';
+      let authUser = null;
+      let accessDenied = false;
+      let deviceOwner = '';
+      let deviceListReference = null;
+
+      function isPermissionError(error) {
+        return /permission/i.test(`${error?.code || ''} ${error?.message || error || ''}`);
+      }
+
+      function handleListenError(error) {
+        online = false;
+        if (isPermissionError(error)) {
+          accessDenied = true;
+          $('connection').textContent = '未登記此手機';
+          openDeviceGate();
+          return;
+        }
+        $('connection').textContent = '離線（本機）';
+      }
+
+      function listenWeek() {
+        if (weekReference) weekReference.off();
+        weekReference = database.ref(weekPath());
+        weekReference.on('value', snapshot => {
+          const data = snapshot.val() || {};
+          coupons = sanitizeCoupons(data.coupons);
+          invalidateAllPeriodStats();
+          online = true;
+          accessDenied = false;
+          $('connection').textContent = '已連線';
+          localData[currentWeek] = { coupons };
+          try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* 本機空間不足時仍保留雲端資料 */ }
+          render();
+        }, handleListenError);
+      }
+
+      function startDataListeners() {
+        listenWeek();
+        if (settingsReference) settingsReference.off();
+        settingsReference = database.ref(settingsPath);
+        settingsReference.on('value', snapshot => {
+          if (snapshot.exists()) {
+            walletConfig = sanitizeWallets(snapshot.val());
+            saveLocalWallets();
+            render();
+          }
+        }, () => {});
+        listenDevices();
+      }
+
+      function parseUserAgent(ua) {
+        const inner = (ua.match(/\(([^)]*)\)/) || ['', ''])[1];
+        const parts = inner.split(';').map(part => part.trim()).filter(Boolean);
+        let model = '', platform = '';
+        const android = ua.match(/Android ([\d.]+)/);
+        const ios = ua.match(/(?:iPhone|CPU) OS (\d+)_(\d+)/);
+        if (android) {
+          platform = `Android ${android[1]}`;
+          const candidate = [...parts].reverse().find(part => !/^(Linux|U|wv|K|HarmonyOS|Android [\d.]+|[a-z]{2}[-_][A-Za-z]{2})$/i.test(part)) || '';
+          model = candidate.replace(/\s*Build\/.*$/, '').trim();
+          if (/HarmonyOS/i.test(ua)) platform += '（鴻蒙）';
+        } else if (/iPhone/.test(ua)) { model = 'iPhone'; platform = ios ? `iOS ${ios[1]}.${ios[2]}` : 'iOS'; }
+        else if (/iPad/.test(ua)) { model = 'iPad'; platform = ios ? `iPadOS ${ios[1]}.${ios[2]}` : 'iPadOS'; }
+        else if (/Macintosh/.test(ua)) platform = 'Mac';
+        else if (/Windows/.test(ua)) platform = 'Windows';
+        return { model, platform };
+      }
+
+      async function describeDevice() {
+        const ua = navigator.userAgent || '';
+        const parsed = parseUserAgent(ua);
+        let hints = null;
+        try { hints = await navigator.userAgentData?.getHighEntropyValues?.(['model', 'platform', 'platformVersion']); } catch { /* 部分瀏覽器不提供型號 */ }
+        const model = hints?.model || parsed.model;
+        const platform = parsed.platform || [hints?.platform, hints?.platformVersion].filter(Boolean).join(' ');
+        return { model: model || '未知型號', platform: platform || '未知系統', userAgent: ua.slice(0, 300) };
+      }
+
+      async function openDeviceGate() {
+        if ($('deviceGate').open) return;
+        $('deviceOwner').innerHTML = MEMBERS.map(member => `<button type="button" class="filter-chip" data-device-owner="${escapeHtml(member)}" aria-pressed="${deviceOwner === member}">${escapeHtml(member)}</button>`).join('');
+        const info = await describeDevice();
+        $('deviceModel').textContent = `會一併記錄手機型號：${info.model}（${info.platform}）`;
+        $('deviceGateStatus').hidden = true;
+        $('deviceGate').showModal();
+        $('deviceCode').focus();
+      }
+
+      async function submitDeviceGate(event) {
+        event.preventDefault();
+        const code = $('deviceCode').value.trim();
+        const status = $('deviceGateStatus');
+        const say = (text, invalid) => { status.hidden = false; status.textContent = text; status.className = `notice ${invalid ? 'invalid' : 'neutral'}`; };
+        if (!/^\d{4,12}$/.test(code)) { say('請輸入 4 至 12 位數字。', true); return; }
+        if (!deviceOwner) { say('請選擇這是誰的手機。', true); return; }
+        if (!authUser || !database) { say('未能連線，請檢查網絡後再試。', true); return; }
+        $('deviceGateSubmit').disabled = true;
+        say('核對中…', false);
+        try {
+          const info = await describeDevice();
+          const now = Date.now();
+          await database.ref(`access/members/${code}/${authUser.uid}`).set(true);
+          await database.ref(`${devicesPath}/${authUser.uid}`).set({ label: `${deviceOwner}的手機`, owner: deviceOwner, ...info, registeredAt: now, lastSeenAt: now });
+          try { localStorage.setItem(`${cacheKey}:deviceOwner`, deviceOwner); } catch { /* 可忽略 */ }
+          $('deviceGate').close();
+          $('deviceCode').value = '';
+          accessDenied = false;
+          startDataListeners();
+          showToast('已登記這部手機，之後不用再輸入。');
+        } catch (error) {
+          say(isPermissionError(error) ? '數字碼不正確，請向家人確認後再輸入。' : '未能連線，請檢查網絡後再試。', true);
+        } finally {
+          $('deviceGateSubmit').disabled = false;
+        }
+      }
+
+      function listenDevices() {
+        if (!authUser || !database) { $('deviceSelf').textContent = ''; return; }
+        if (deviceListReference) deviceListReference.off();
+        deviceListReference = database.ref(devicesPath);
+        deviceListReference.on('value', snapshot => {
+          const devices = Object.entries(snapshot.val() || {}).filter(([, d]) => d && typeof d === 'object');
+          const mine = devices.find(([uid]) => uid === authUser.uid)?.[1];
+          if (mine && !listenDevices.touched) {
+            listenDevices.touched = true;
+            database.ref(`${devicesPath}/${authUser.uid}/lastSeenAt`).set(Date.now()).catch(() => {});
+          }
+          $('deviceSelf').textContent = mine ? `這部手機：${mine.label || ''}（${mine.model || '未知型號'}）` : devices.length ? '' : '家庭數字碼尚未啟用；開啟方法見 FIREBASE_SETUP.md。';
+          const date = ms => Number.isFinite(ms) ? new Intl.DateTimeFormat('zh-Hant', { timeZone: 'Asia/Macau', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(ms)) : '—';
+          $('deviceList').innerHTML = devices.length ? `<h3>已登記的手機（${devices.length}）</h3><ul>${devices
+            .sort(([, a], [, b]) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0))
+            .map(([uid, d]) => `<li><span><strong>${escapeHtml(d.label || '未命名')}</strong><small>${escapeHtml(d.model || '未知型號')} · ${escapeHtml(d.platform || '')} · 最近使用 ${date(d.lastSeenAt)}</small></span>${uid === authUser.uid ? '<em>這部</em>' : `<button type="button" class="text-button delete-link" data-remove-device="${escapeHtml(uid)}" data-label="${escapeHtml(d.label || '')}">移除</button>`}</li>`).join('')}</ul>` : '';
+        }, () => { $('deviceList').innerHTML = ''; });
+      }
+
       function initializeFirebase() {
         if (typeof firebase === 'undefined') {
           $('connection').textContent = '離線（本機）';
@@ -2686,28 +2902,16 @@
         try {
           if (!firebase.apps.length) firebase.initializeApp(CONFIG);
           database = firebase.database();
-          weekReference = database.ref(weekPath());
-          weekReference.on('value', snapshot => {
-            const data = snapshot.val() || {};
-            coupons = sanitizeCoupons(data.coupons);
-            invalidateAllPeriodStats();
-            online = true;
-            $('connection').textContent = '已連線';
-            localData[currentWeek] = { coupons };
-            try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* 本機空間不足時仍保留雲端資料 */ }
-            render();
-          }, () => {
-            online = false;
-            $('connection').textContent = '離線（本機）';
+          try { deviceOwner = localStorage.getItem(`${cacheKey}:deviceOwner`) || ''; } catch { deviceOwner = ''; }
+          const auth = typeof firebase.auth === 'function' ? firebase.auth() : null;
+          if (!auth) { startDataListeners(); return; }
+          let started = false;
+          const start = () => { if (!started) { started = true; startDataListeners(); } };
+          auth.onAuthStateChanged(user => {
+            authUser = user || null;
+            if (user) start();
           });
-          settingsReference = database.ref(settingsPath);
-          settingsReference.on('value', snapshot => {
-            if (snapshot.exists()) {
-              walletConfig = sanitizeWallets(snapshot.val());
-              saveLocalWallets();
-              render();
-            }
-          }, () => {});
+          auth.signInAnonymously().catch(() => start()); // 未啟用匿名登入時沿用現有方式
         } catch {
           $('connection').textContent = '離線（本機）';
         }
@@ -2736,35 +2940,21 @@
       $('week').addEventListener('change', event => {
         currentWeek = event.target.value;
         expandedWallet = null;
-        $('redeemDialog').close(); $('walletRedeemDialog').close(); $('correctionDialog').close();
+        $('redeemDialog').close(); $('correctionDialog').close();
         invalidateAllPeriodStats();
-        if (weekReference) weekReference.off();
         coupons = sanitizeCoupons(localData[currentWeek]?.coupons);
         render();
-        if (database) {
-          weekReference = database.ref(weekPath());
-          weekReference.on('value', snapshot => {
-            const data = snapshot.val() || {};
-            coupons = sanitizeCoupons(data.coupons);
-            invalidateAllPeriodStats();
-            online = true;
-            $('connection').textContent = '已連線';
-            localData[currentWeek] = { coupons };
-            try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* 本機空間不足時仍保留雲端資料 */ }
-            render();
-          }, () => {
-            online = false;
-            $('connection').textContent = '離線（本機）';
-          });
-        }
+        if (database && !accessDenied) listenWeek();
       });
 
       $('recordMember').addEventListener('change', () => {
+        clearSavedNotice();
         setWalletOptions('recordWallet', $('recordMember').value);
         resetDrawResults();
         renderRegistrationStatus();
       });
       $('recordWallet').addEventListener('change', () => {
+        clearSavedNotice();
         resetDrawResults();
         renderRegistrationStatus();
       });
@@ -2827,19 +3017,13 @@
         if (event.target.matches('[data-redemption-amount]')) validateRedemptionForm();
       });
       $('cancelRedemption').addEventListener('click', () => $('redeemDialog').close());
+      $('redeemCouponPicker').addEventListener('change', () => refreshMergedRedemption());
       $('redeemDialog').addEventListener('close', () => {
         pendingRedemption = null;
+        pendingWalletRedemption = null;
+        $('redeemCouponPicker').hidden = true;
         if (walletPlanReturnFocus) restoreWalletPlanFocus();
       });
-      $('walletRedeemForm').addEventListener('submit', continueWalletRedemption);
-      $('walletRedeemChoices').addEventListener('change', updateWalletRedemptionSelection);
-      $('cancelWalletRedeem').addEventListener('click', () => $('walletRedeemDialog').close());
-      $('walletRedeemDialog').addEventListener('close', () => {
-        const movingToPaymentReview = walletPlanTransitioning || Boolean(pendingRedemption);
-        pendingWalletRedemption = null;
-        if (walletPlanReturnFocus && !movingToPaymentReview) restoreWalletPlanFocus();
-      });
-
       $('vaultMemberFilter').addEventListener('click', event => {
         const button = event.target.closest('[data-vault-member]');
         if (!button) return;
@@ -2894,12 +3078,23 @@
         openWalletRedemption(button.dataset.member, button.dataset.payment);
       });
       $('memberCompare').addEventListener('click', event => {
+        const redeem = event.target.closest('[data-wallet-redemption]');
+        if (redeem) { openWalletRedemption(redeem.dataset.member, redeem.dataset.payment); return; }
         if (event.target.closest('[data-open-registration]')) {
           const next = pendingRegistrations()[0];
           openRegistration(next?.member, next?.payment);
         }
       });
       $('record').addEventListener('click', event => {
+        if (event.target.closest('[data-stay-here]')) {
+          clearInterval(savedNoticeTimer);
+          savedNoticeTimer = null;
+          if (savedNotice) { savedNotice.seconds = 0; }
+          $('recordSaved').querySelector('[data-stay-here]')?.remove();
+          const line = $('recordSaved').querySelector('.record-saved-next');
+          if (line && savedNotice?.next) line.innerHTML = `下一個：<strong>${escapeHtml(savedNotice.next.member)} · ${escapeHtml(savedNotice.next.payment)}</strong>`;
+          return;
+        }
         const reregister = event.target.closest('[data-reregister]');
         if (reregister) { clearWalletForReregistration(reregister.dataset.member, reregister.dataset.payment); return; }
         const target = event.target.closest('[data-record-target]');
@@ -2959,6 +3154,22 @@
         if (button.dataset.action === 'redeem') openWalletRedemption(coupon.member, coupon.payment, { preselectedIds: [id] });
       });
 
+      $('deviceGateForm').addEventListener('submit', submitDeviceGate);
+      $('deviceGate').addEventListener('cancel', event => event.preventDefault());
+      $('deviceOwner').addEventListener('click', event => {
+        const button = event.target.closest('[data-device-owner]');
+        if (!button) return;
+        deviceOwner = button.dataset.deviceOwner;
+        $('deviceOwner').querySelectorAll('[data-device-owner]').forEach(node => node.setAttribute('aria-pressed', String(node === button)));
+      });
+      $('deviceList').addEventListener('click', event => {
+        const button = event.target.closest('[data-remove-device]');
+        if (!button || !database) return;
+        if (!window.confirm(`移除「${button.dataset.label || '此手機'}」？該手機下次打開要重新輸入家庭數字碼。`)) return;
+        database.ref(`${devicesPath}/${button.dataset.removeDevice}`).set(null)
+          .then(() => showToast('已移除該手機。'))
+          .catch(() => showToast('未能移除，請稍後再試。'));
+      });
       $('export').addEventListener('click', exportBackup);
       $('import').addEventListener('change', importBackup);
       document.querySelectorAll('[data-nav]').forEach(button => button.addEventListener('click', () => setActivePanel(button.dataset.nav)));

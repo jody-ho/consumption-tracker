@@ -936,3 +936,44 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
   .drawn-layout { grid-template-columns: 1fr; gap: 10px; }
   .drawn-block .dashboard-main { margin: 10px 0 4px; }
 }
+
+/* v4.16 — saved notice, collapsible progress, single redemption sheet, unused list */
+.record-progress > summary { cursor: pointer; list-style: none; }
+.record-progress > summary::-webkit-details-marker { display: none; }
+.record-progress > summary h3::after { margin-left: 6px; color: var(--pine-700); font-weight: 500; content: "＋"; }
+.record-progress[open] > summary h3::after { content: "−"; }
+.record-progress:not([open]) > summary { margin-bottom: 0; }
+.record-saved { margin: 10px 0 14px; padding: 16px; border: 2px solid #5c9b7c; border-radius: 14px; background: #eef7f1; scroll-margin: 90px; }
+.record-saved[hidden] { display: none; }
+.record-saved-title { margin: 0; color: #2f6b4a; font-size: 22px; font-weight: 900; }
+.record-saved-target { margin: 4px 0 10px; color: var(--pine-950); font-size: 17px; font-weight: 800; }
+.record-saved-next { margin: 10px 0 8px; font-size: 16px; }
+.statusline { scroll-margin: 16px; }
+.redeem-dialog .wallet-redeem-choices { display: grid; gap: 8px; margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.redeem-dialog .wallet-redeem-choices[hidden] { display: none; }
+.redeem-dialog .wallet-redeem-choices legend { padding: 0 4px; font-weight: 850; }
+.redeem-dialog .wallet-redeem-choices legend small { color: var(--muted); font-weight: 600; }
+.redeem-summary-line { margin: 0 0 4px; }
+.redeem-summary-line strong { font-variant-numeric: tabular-nums; }
+.unused-list-block { grid-column: 1 / -1; }
+.unused-list-block.is-urgent { border: 2px solid var(--danger); background: #fdf3f1; }
+.unused-list-block.is-urgent .dashboard-kicker { background: var(--danger); color: #fff; }
+.unused-list-block.is-urgent .drawn-progress { color: var(--danger); }
+.urgent-line { margin: 10px 0 6px; color: var(--danger); font-size: 16px; font-weight: 750; }
+.unused-wallets { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.unused-wallets li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.unused-wallets li > span { display: grid; gap: 2px; min-width: 0; }
+.unused-wallets small { color: var(--muted); }
+.unused-wallets .button { flex: 0 0 auto; white-space: nowrap; }
+.device-gate { max-width: 420px; }
+.device-gate h2 { margin: 0 0 6px; font-size: 24px; }
+.device-gate .lead { font-size: 17px; }
+.device-code-input { font-size: 28px; letter-spacing: .3em; text-align: center; font-variant-numeric: tabular-nums; }
+.device-owner { margin-bottom: 8px; }
+.device-owner .filter-chip { min-height: 48px; padding: 8px 16px; font-size: 17px; }
+.device-list h3 { margin: 14px 0 6px; font-size: 16px; }
+.device-list ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.device-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.device-list li > span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.device-list small { color: var(--muted); }
+.device-list em { color: #2f6b4a; font-style: normal; font-weight: 800; white-space: nowrap; }

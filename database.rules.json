@@ -1,0 +1,32 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "access": {
+      "familyCode": {
+        ".read": false,
+        ".write": false
+      },
+      "members": {
+        ".read": false,
+        "$code": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && $code === root.child('access/familyCode').val()",
+            ".validate": "newData.val() === true"
+          }
+        }
+      },
+      "devices": {
+        ".read": "auth != null && root.child('access/members').child(root.child('access/familyCode').val()).child(auth.uid).exists() && root.child('access/devices').child(auth.uid).exists()",
+        "$uid": {
+          ".write": "auth != null && root.child('access/members').child(root.child('access/familyCode').val()).child(auth.uid).exists() && (auth.uid === $uid || (!newData.exists() && root.child('access/devices').child(auth.uid).exists()))",
+          ".validate": "newData.hasChildren(['label', 'registeredAt'])"
+        }
+      }
+    },
+    "campaigns": {
+      ".read": "auth != null && root.child('access/members').child(root.child('access/familyCode').val()).child(auth.uid).exists() && root.child('access/devices').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('access/members').child(root.child('access/familyCode').val()).child(auth.uid).exists() && root.child('access/devices').child(auth.uid).exists()"
+    }
+  }
+}

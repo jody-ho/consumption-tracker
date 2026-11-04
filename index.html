@@ -4,12 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#19594c">
-  <meta name="application-version" content="4.15.0">
+  <meta name="application-version" content="4.16.0">
   <meta name="description" content="澳門社區消費連環賞家庭消費帳冊：登記三券、家庭小計與分單試算">
   <title>澳門消費連環賞｜家庭消費帳冊</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="消費帳冊">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <link rel="stylesheet" href="./style.css?v=4.15.0">
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+  <link rel="stylesheet" href="./style.css?v=4.16.0">
 </head>
 <body>
   <header class="hero">
@@ -147,10 +155,10 @@
       <article class="card">
         <h2>登記三個抽獎結果</h2>
         <p class="lead">先選家人和支付方式，再為三列各自選已開獎結果；結果未齊時先不儲存。每個錢包每週最多 3 次。</p>
-        <section class="record-progress" aria-labelledby="recordProgressHeading">
-          <div class="record-progress-head"><h3 id="recordProgressHeading">本週登記進度</h3><span id="recordProgressCount" class="record-progress-count"></span></div>
+        <details id="recordProgressBox" class="record-progress" open>
+          <summary class="record-progress-head"><h3 id="recordProgressHeading">本週登記進度</h3><span id="recordProgressCount" class="record-progress-count"></span></summary>
           <div id="recordProgress" class="record-progress-grid" role="group" aria-label="各家人錢包登記狀態，點選即可切換"></div>
-        </section>
+        </details>
         <div class="record-targets">
           <div class="field">
             <label for="recordMember">家庭成員</label>
@@ -161,6 +169,7 @@
             <select id="recordWallet" class="control"></select>
           </div>
         </div>
+        <div id="recordSaved" class="record-saved" role="status" aria-live="assertive" hidden></div>
         <div id="recordStatus" class="statusline" aria-live="polite"></div>
         <div id="recordExisting" class="record-existing" hidden></div>
         <div id="slots" class="slot-list"></div>
@@ -220,7 +229,10 @@
       </article>
       <article class="card">
         <h2>資料與安全</h2>
-        <p class="hint">本頁不保存支付帳戶、密碼或卡資料。券與家庭支付設定只存於既有 Firebase／本機備份；收緊 Firebase 規則前，請先完成 Authentication、成員白名單及規則模擬。本次不修改雲端資料或部署安全規則。</p>
+        <p class="hint">本頁不保存支付帳戶、密碼或卡資料。開啟「家庭數字碼」後，只有輸入過數字碼的手機可以讀寫資料；每部手機只需輸入一次。</p>
+        <p id="deviceSelf" class="hint"></p>
+        <div id="deviceList" class="device-list"></div>
+        <details class="inline-help"><summary>把網站加到手機主畫面</summary><p class="hint"><strong>iPhone：</strong>用 Safari 打開本頁 → 按下方「分享」→「加入主畫面」。<br><strong>Android：</strong>用 Chrome 打開本頁 → 右上角「⋮」→「加到主畫面」。之後在主畫面按「消費帳冊」圖示即可打開。</p></details>
       </article>
       <details class="card settings-card">
         <summary>家庭支付方式設定 <span class="hint">只需設定一次</span></summary>
@@ -232,7 +244,7 @@
       </details>
     </section>
 
-    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.15.0</small></footer>
+    <footer class="footer">消費規劃僅供參考；實際抽獎資格、商戶參與、券核銷與有效期以活動公告及支付平台為準。 <small>v4.16.0</small></footer>
   </main>
 
   <nav class="bottom-nav" aria-label="主要導覽">
@@ -247,34 +259,20 @@
         <h2 id="redeemDialogTitle">確認核銷</h2>
         <p id="redeemDialogHint" class="hint">預填金額為估算；請核對或修改，確認後記為本筆實際金額及核銷。</p>
       </div>
-      <div id="redeemValidation" class="notice neutral redeem-validation" role="status" aria-live="polite" tabindex="-1"></div>
+      <fieldset id="redeemCouponPicker" class="wallet-redeem-choices" hidden></fieldset>
+      <div id="redeemTransactions" class="redeem-transactions"></div>
       <div id="redeemDateField" class="field">
         <label for="redeemDate">核銷日期</label>
         <input id="redeemDate" class="control" type="date" required>
       </div>
-      <div id="redeemTransactions" class="redeem-transactions"></div>
+      <div id="redeemValidation" class="notice neutral redeem-validation" role="status" aria-live="polite" tabindex="-1"></div>
       <div class="dialog-actions">
         <button id="cancelRedemption" class="button secondary" type="button">取消</button>
         <button id="confirmRedemption" class="button" type="submit">確認金額並核銷</button>
       </div>
     </form>
   </dialog>
-  <dialog id="walletRedeemDialog" class="redeem-dialog wallet-redeem-dialog" aria-labelledby="walletRedeemTitle">
-    <form id="walletRedeemForm" novalidate>
-      <div>
-        <h2 id="walletRedeemTitle">直接核銷</h2>
-        <p id="walletRedeemIntro" class="hint">勾選本次同一筆交易實際使用的券。政府電子券可多張；每單最多一張商戶券。</p>
-      </div>
-      <fieldset id="walletRedeemChoices" class="wallet-redeem-choices">
-        <legend>選擇本次使用的券</legend>
-      </fieldset>
-      <div id="walletRedeemStatus" class="notice neutral" role="status" aria-live="polite"></div>
-      <div class="dialog-actions">
-        <button id="cancelWalletRedeem" class="button secondary" type="button">取消</button>
-        <button id="continueWalletRedeem" class="button" type="submit">下一步：確認用券</button>
-      </div>
-  </form>
-  </dialog>
+  <p id="walletRedeemStatus" hidden></p>
   <dialog id="correctionDialog" class="redeem-dialog" aria-labelledby="correctionTitle">
     <form id="correctionForm" novalidate>
       <h2 id="correctionTitle">更正同一筆實際金額</h2>
@@ -285,7 +283,20 @@
       <div class="dialog-actions"><button id="cancelCorrection" type="button" class="button secondary">取消</button><button id="saveCorrection" type="submit" class="button">儲存更正</button></div>
     </form>
   </dialog>
+  <dialog id="deviceGate" class="redeem-dialog device-gate" aria-labelledby="deviceGateTitle">
+    <form id="deviceGateForm" novalidate>
+      <h2 id="deviceGateTitle">第一次使用這部手機</h2>
+      <p class="lead">請輸入家庭數字碼。每部手機只需輸入一次，之後打開就能直接用。</p>
+      <label for="deviceCode">家庭數字碼</label>
+      <input id="deviceCode" class="control device-code-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="12" required>
+      <p class="filter-label">這是誰的手機？</p>
+      <div id="deviceOwner" class="filter-chips device-owner" role="group" aria-label="手機主人"></div>
+      <p id="deviceModel" class="hint"></p>
+      <p id="deviceGateStatus" class="notice neutral" role="status" aria-live="assertive" hidden></p>
+      <div class="dialog-actions"><button id="deviceGateSubmit" class="button full" type="submit">確認</button></div>
+    </form>
+  </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="./script.js?v=4.15.0"></script>
+  <script src="./script.js?v=4.16.0"></script>
 </body>
 </html>

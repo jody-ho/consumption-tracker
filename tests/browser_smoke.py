@@ -76,9 +76,8 @@ with sync_playwright() as playwright:
     assert 'MOP 68' in page.locator('.plan-amount-hero').inner_text()
     assert '第 1 單 · 爸爸 · MPay' in page.locator('.plan-transaction-summary').inner_text()
     page.locator('[data-use-plan]').click()
-    assert page.locator('#walletRedeemDialog').is_visible()
-    assert page.locator('#walletRedeemChoices [data-wallet-coupon]:checked').count() == 2
-    page.locator('#continueWalletRedeem').click()
+    assert page.locator('#redeemDialog').is_visible()
+    assert page.locator('#redeemCouponPicker [data-wallet-coupon]:checked').count() == 2
     assert page.locator('#redeemDialog').is_visible()
     # Amounts are auto-filled from the coupons' face value and stay editable.
     assert page.locator('#redeemSpend-0').input_value() == '100'
@@ -100,8 +99,8 @@ with sync_playwright() as playwright:
     assert write_count(page) == 0
     page.locator('[data-nav="home"]').click()
     page.locator('#couponList [data-action="redeem"][data-id="dadGov"]').click()
-    assert page.locator('#walletRedeemDialog').is_visible()
-    page.locator('#cancelWalletRedeem').click()
+    assert page.locator('#redeemDialog').is_visible()
+    page.locator('#cancelRedemption').click()
     assert write_count(page) == 0
 
     # All three draw results are required and existing wallet results cannot be overwritten.
@@ -123,11 +122,10 @@ with sync_playwright() as playwright:
     page.locator('[data-nav="overview"]').click()
     page.locator('[data-expand-wallet][data-member="爸爸"][data-payment="MPay"]').click()
     page.locator('#walletRedemptionCards [data-wallet-redemption][data-member="爸爸"]').click()
-    assert page.locator('#walletRedeemDialog').is_visible()
-    page.locator('#cancelWalletRedeem').click()
+    assert page.locator('#redeemDialog').is_visible()
+    page.locator('#cancelRedemption').click()
     assert write_count(page) == 1
     page.locator('#walletRedemptionCards [data-wallet-redemption][data-member="爸爸"]').click()
-    page.locator('#continueWalletRedeem').click()
     assert page.locator('#redeemSpend-0').input_value() == '60'
     assert page.locator('#redeemAmount-0').input_value() == '40'
     assert page.locator('#confirmRedemption').is_enabled()
@@ -181,7 +179,6 @@ with sync_playwright() as playwright:
     failed, errors = page_for(browser)
     failed.locator('[data-expand-wallet][data-member="爸爸"][data-payment="MPay"]').click()
     failed.locator('#walletRedemptionCards [data-wallet-redemption][data-member="爸爸"]').click()
-    failed.locator('#continueWalletRedeem').click()
     failed.locator('#redeemSpend-0').fill('60')
     failed.locator('#redeemAmount-0').fill('40')
     failed.evaluate('window.__fake.failNext = true')
@@ -211,6 +208,8 @@ with sync_playwright() as playwright:
     assert flow.locator('#recordMember').input_value() == '媽媽'
     assert flow.locator('#recordWallet').input_value() == '工銀'
     assert '已選 0/3' in flow.locator('#saveDraw').inner_text()
+    assert flow.locator('#recordProgressBox').get_attribute('open') is None
+    flow.locator('#recordProgressBox > summary').click()
     flow.locator('[data-record-target][data-member="爸爸"][data-payment="MPay"]').first.click()
     assert flow.locator('#recordWallet').input_value() == 'MPay'
     assert flow.locator('#slots').is_hidden()
@@ -235,14 +234,97 @@ with sync_playwright() as playwright:
     flow.locator('#saveDraw').click()
     assert write_count(flow) == 2
     assert int(badge.inner_text()) == before
-    assert '下一個未登記' in flow.locator('#recordExisting').inner_text()
+    saved = flow.locator('#recordSaved')
+    assert saved.is_visible() and '已儲存成功' in saved.inner_text() and '秒後轉到下一個' in saved.inner_text()
+    assert flow.locator('#recordExisting').is_hidden()
+    flow.locator('[data-stay-here]').click()
+    flow.clock.run_for(6000)
+    assert flow.locator('#recordWallet').input_value() == 'MPay' and flow.locator('#recordMember').input_value() == '爸爸'
+    assert '已儲存成功' in saved.inner_text()
+    # Without "stay here" the page moves on by itself after showing success.
+    next_member, next_payment = flow.evaluate("[document.querySelector('#recordSaved [data-record-target]').dataset.member, document.querySelector('#recordSaved [data-record-target]').dataset.payment]")
+    flow.locator('#recordSaved [data-record-target]').click()
+    assert flow.locator('#recordMember').input_value() == next_member
+    for index, result in enumerate(('10', '20', 'zero')):
+        flow.locator(f'[data-slot-index="{index}"][data-result="{result}"]').click()
+    flow.locator('#saveDraw').click()
+    assert '已儲存成功' in saved.inner_text()
+    flow.clock.run_for(5000)
+    assert (flow.locator('#recordMember').input_value(), flow.locator('#recordWallet').input_value()) != (next_member, next_payment)
+    assert '上一個已儲存' in saved.inner_text()
+    assert flow.locator('#recordProgressBox').get_attribute('open') is None
     # Wallets with a redeemed coupon cannot be wiped in one step.
     flow.locator('[data-nav="home"]').click()
-    assert flow.locator('#couponList [data-reregister][data-member="媽媽"]').count() == 0
+    assert flow.locator('#couponList [data-reregister][data-member="媽媽"][data-payment="中銀"]').count() == 0
     assert flow.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert not errors, errors
-    print('registration progress, jump-to-register and re-registration PASS')
+    flow.locator('[data-nav="overview"]').click()
+    unused = flow.locator('.unused-list-block')
+    assert '爸爸 · MPay' in unused.inner_text() and '還有' in unused.inner_text()
+    unused.locator('[data-wallet-redemption][data-member="爸爸"]').click()
+    assert flow.locator('#redeemDialog').is_visible() and flow.locator('#redeemCouponPicker').is_visible()
+    assert flow.locator('#redeemSpend-0').input_value() == '150'
+    boxes = flow.locator('#redeemCouponPicker [data-wallet-coupon]')
+    assert boxes.count() == 2  # MOP 50 + gift after re-registration
+    boxes.nth(0).uncheck()
+    assert flow.locator('#confirmRedemption').is_disabled()
+    assert flow.locator('#redeemSpend-0').count() == 0
+    boxes.nth(1).check()
+    assert flow.locator('#redeemSpend-0').input_value() == ''  # gift has no face value
+    boxes.nth(0).check()
+    assert flow.locator('#redeemSpend-0').input_value() == '150'
+    assert flow.locator('#redeemAmount-0').input_value() == '100'
+    flow.locator('#cancelRedemption').click()
+    assert write_count(flow) == 3
+    print('registration progress, saved notice, auto-advance, home unused list and single redemption sheet PASS')
     flow.close()
+
+    # Family-code device registration with simulated database rules.
+    gate = browser.new_page(viewport={'width': 375, 'height': 850}, timezone_id='Asia/Macau')
+    gate.clock.install(time=datetime(2026, 10, 10, 12, tzinfo=timezone.utc))
+    gate.add_init_script(script="window.__fakeRules = { familyCode: '2468' };")
+    gate.add_init_script(path=str(ROOT / 'firebase_mock.js'))
+    gate.route('https://**', lambda route: route.fulfill(status=200, content_type='application/javascript', body=''))
+    gate_errors = []
+    gate.on('pageerror', lambda error: gate_errors.append(str(error)))
+    gate.goto(URL, wait_until='load')
+    gate.wait_for_selector('#deviceGate[open]')
+    assert gate.locator('#connection').inner_text() == '未登記此手機'
+    assert 'MOP 50' not in gate.locator('#memberCompare').inner_text()
+    gate.locator('#deviceCode').fill('2468')
+    gate.locator('#deviceGateSubmit').click()
+    assert '請選擇這是誰的手機' in gate.locator('#deviceGateStatus').inner_text()
+    gate.locator('[data-device-owner="媽媽"]').click()
+    gate.locator('#deviceCode').fill('1111')
+    gate.locator('#deviceGateSubmit').click()
+    gate.wait_for_function("document.querySelector('#deviceGateStatus').textContent.includes('數字碼不正確')")
+    assert gate.locator('#deviceGate').is_visible()
+    gate.locator('#deviceCode').fill('2468')
+    gate.locator('#deviceGateSubmit').click()
+    gate.wait_for_function("!document.querySelector('#deviceGate').open")
+    assert gate.locator('#connection').inner_text() == '已連線'
+    assert 'MOP 50' in gate.locator('.drawn-block').inner_text()
+    device = gate.evaluate("window.__fake.root.access.devices['device-test-1']")
+    assert device['owner'] == '媽媽' and device['label'] == '媽媽的手機' and device['model'] and 'code' not in device
+    assert gate.evaluate("window.__fake.root.access.members['2468']['device-test-1'] === true")
+    assert '2468' not in json.dumps(gate.evaluate("window.__fake.root.access.devices"))
+    gate.locator('[data-nav="home"]').click()
+    assert '媽媽的手機' in gate.locator('#deviceList').inner_text()
+    assert '這部手機：媽媽的手機' in gate.locator('#deviceSelf').inner_text()
+    # Reload: the same browser stays registered and never asks again.
+    gate.reload(wait_until='load')
+    gate.wait_for_timeout(200)
+    assert not gate_errors, gate_errors
+    print('family-code device registration PASS')
+    gate.close()
+
+    lastday, errors = page_for(browser, now=datetime(2026, 10, 15, 4, tzinfo=timezone.utc))
+    block = lastday.locator('.unused-list-block.is-urgent')
+    assert block.is_visible() and '今晚 23:59' in block.inner_text()
+    assert lastday.evaluate("document.querySelector('.dashboard-sections').firstElementChild.classList.contains('unused-list-block')")
+    assert not errors, errors
+    print('last-day expiry warning PASS')
+    lastday.close()
 
     expired, errors = page_for(browser, now=datetime(2026, 10, 30, 12, tzinfo=timezone.utc))
     expired.locator('#week').select_option('2026R2-W1')
@@ -250,6 +332,7 @@ with sync_playwright() as playwright:
     assert expired.locator('#saveDraw').is_disabled()
     assert expired.locator('#recordNavBadge').is_hidden()
     assert expired.locator('[data-reregister]').count() == 0
+    assert expired.locator('.unused-list-block').count() == 0
     expired.locator('[data-nav="overview"]').click()
     assert expired.locator('#walletRedemptionCards [data-wallet-redemption]').count() == 0
     assert 'MOP 0' in expired.locator('#memberCompare').inner_text()
