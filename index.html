@@ -16,7 +16,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
   <link rel="stylesheet" href="./style.css?v=4.16.0">
 </head>
 <body>
@@ -60,7 +59,7 @@
     <section id="overview" class="panel active" aria-label="本週概覽">
       <section class="family-overview" aria-labelledby="matrixHeading">
         <div class="section-line"><h2 id="matrixHeading">本週消費總覽</h2><button class="info-toggle" type="button" aria-expanded="false" aria-controls="matrixHelp">金額說明</button></div>
-        <div id="matrixHelp" class="help-copy" hidden>未使用區只計尚有效的政府電子券：最低購物額參考為券面額 × 3，預計自付為此參考額減券面額。商戶券、禮遇券及其他優惠不混算。已使用區只計有完整實際支出與實付的交易，同筆多券只計一次；缺漏會另外提示。</div>
+        <div id="matrixHelp" class="help-copy" hidden>「用完電子券要付多少」只計尚有效、未用的政府電子券：每張要消費面額 × 3，要付 = 消費 − 券面額（即面額 × 2）。商戶券、禮遇券及其他優惠不計在內。「已使用的券」只計有完整實際支出與實付的交易，同筆多券只計一次；缺漏會另外提示。</div>
         <div id="memberCompare" aria-label="五位家人及全家合計金額比較"></div>
       </section>
       <section class="family-wallets" aria-labelledby="walletRedemptionHeading">
@@ -229,9 +228,7 @@
       </article>
       <article class="card">
         <h2>資料與安全</h2>
-        <p class="hint">本頁不保存支付帳戶、密碼或卡資料。開啟「家庭數字碼」後，只有輸入過數字碼的手機可以讀寫資料；每部手機只需輸入一次。</p>
-        <p id="deviceSelf" class="hint"></p>
-        <div id="deviceList" class="device-list"></div>
+        <p class="hint">本頁不保存支付帳戶、密碼或卡資料。券與家庭支付設定存於 Firebase 及本機備份。</p>
         <details class="inline-help"><summary>把網站加到手機主畫面</summary><p class="hint"><strong>iPhone：</strong>用 Safari 打開本頁 → 按下方「分享」→「加入主畫面」。<br><strong>Android：</strong>用 Chrome 打開本頁 → 右上角「⋮」→「加到主畫面」。之後在主畫面按「消費帳冊」圖示即可打開。</p></details>
       </article>
       <details class="card settings-card">
@@ -257,12 +254,12 @@
     <form id="redeemForm" novalidate>
       <div>
         <h2 id="redeemDialogTitle">確認核銷</h2>
-        <p id="redeemDialogHint" class="hint">預填金額為估算；請核對或修改，確認後記為本筆實際金額及核銷。</p>
+        <p id="redeemDialogHint" class="hint"></p>
       </div>
       <fieldset id="redeemCouponPicker" class="wallet-redeem-choices" hidden></fieldset>
       <div id="redeemTransactions" class="redeem-transactions"></div>
       <div id="redeemDateField" class="field">
-        <label for="redeemDate">核銷日期</label>
+        <label for="redeemDate">日期</label>
         <input id="redeemDate" class="control" type="date" required>
       </div>
       <div id="redeemValidation" class="notice neutral redeem-validation" role="status" aria-live="polite" tabindex="-1"></div>
@@ -281,19 +278,6 @@
       <label for="correctionPaid">已記錄實付（MOP）</label><input id="correctionPaid" class="control" type="number" min="0" step="0.01" inputmode="decimal" required>
       <p id="correctionStatus" role="status"></p>
       <div class="dialog-actions"><button id="cancelCorrection" type="button" class="button secondary">取消</button><button id="saveCorrection" type="submit" class="button">儲存更正</button></div>
-    </form>
-  </dialog>
-  <dialog id="deviceGate" class="redeem-dialog device-gate" aria-labelledby="deviceGateTitle">
-    <form id="deviceGateForm" novalidate>
-      <h2 id="deviceGateTitle">第一次使用這部手機</h2>
-      <p class="lead">請輸入家庭數字碼。每部手機只需輸入一次，之後打開就能直接用。</p>
-      <label for="deviceCode">家庭數字碼</label>
-      <input id="deviceCode" class="control device-code-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="12" required>
-      <p class="filter-label">這是誰的手機？</p>
-      <div id="deviceOwner" class="filter-chips device-owner" role="group" aria-label="手機主人"></div>
-      <p id="deviceModel" class="hint"></p>
-      <p id="deviceGateStatus" class="notice neutral" role="status" aria-live="assertive" hidden></p>
-      <div class="dialog-actions"><button id="deviceGateSubmit" class="button full" type="submit">確認</button></div>
     </form>
   </dialog>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>

@@ -1243,25 +1243,43 @@
         return Math.round((end - today) / 86400000);
       }
 
-      function unusedWalletsMarkup(rows) {
+      function payToUseMarkup(rows) {
         if (isWeekExpired(currentWeek)) return '';
-        const wallets = [];
-        for (const member of MEMBERS) for (const payment of WALLETS) {
-          const list = rows.filter(coupon => coupon.member === member && coupon.payment === payment && !coupon.used && ['gov', 'merchant', 'gift'].includes(coupon.type));
-          if (!list.length) continue;
-          const govCents = list.filter(c => c.type === 'gov').reduce((sum, c) => sum + toCents(c.amount), 0);
-          const parts = [govCents ? `電子券 MOP ${formatMop(govCents / CENTS)}` : '', list.some(c => c.type === 'merchant') ? '商戶券' : '', list.some(c => c.type === 'gift') ? '禮遇券' : ''].filter(Boolean);
-          wallets.push({ member, payment, govCents, parts });
+        const money = cents => `MOP ${formatMop(cents / CENTS)}`;
+        const members = [];
+        const others = [];
+        for (const member of MEMBERS) {
+          const wallets = [];
+          for (const payment of WALLETS) {
+            const list = rows.filter(coupon => coupon.member === member && coupon.payment === payment && !coupon.used);
+            const govCents = list.filter(c => c.type === 'gov').reduce((sum, c) => sum + toCents(c.amount), 0);
+            if (govCents) wallets.push({ payment, govCents, spendCents: govCents * 3, payCents: govCents * 2, count: list.filter(c => c.type === 'gov').length });
+            else if (list.some(c => c.type === 'merchant' || c.type === 'gift')) others.push(`${member} · ${payment}`);
+          }
+          if (wallets.length) members.push({ member, wallets, payCents: wallets.reduce((sum, w) => sum + w.payCents, 0) });
         }
-        if (!wallets.length) return '';
         const days = daysUntilWeekEnd();
-        const total = wallets.reduce((sum, w) => sum + w.govCents, 0);
         const urgent = days !== null && days <= 1;
         const when = days === null ? '' : days <= 0 ? '今晚 23:59 到期' : days === 1 ? '明晚 23:59 到期' : `還有 ${days} 天到期`;
-        return `<section class="dashboard-block unused-list-block${urgent ? ' is-urgent' : ''}" aria-label="還沒用的券">
-          <div class="dashboard-block-head"><span class="dashboard-kicker">${urgent ? '⚠ 快到期' : '待用'}</span><h3>還沒用的券</h3><span class="drawn-progress">${escapeHtml(when)}</span></div>
-          ${urgent ? `<p class="urgent-line">${days <= 0 ? '今晚' : '明晚'} 23:59 後失效：還有 <strong>MOP ${formatMop(total / CENTS)}</strong> 電子券未用${wallets.some(w => !w.govCents) ? '，另有商戶券／禮遇券' : ''}。</p>` : ''}
-          <ul class="unused-wallets">${wallets.map(w => `<li><span><strong>${escapeHtml(w.member)} · ${escapeHtml(w.payment)}</strong><small>${escapeHtml(w.parts.join(' + '))}</small></span><button class="button small" type="button" data-wallet-redemption data-member="${escapeHtml(w.member)}" data-payment="${escapeHtml(w.payment)}" aria-label="核銷 ${escapeHtml(w.member)} ${escapeHtml(w.payment)} 的券">核銷</button></li>`).join('')}</ul>
+        const totalPay = members.reduce((sum, m) => sum + m.payCents, 0);
+        const totalGov = members.reduce((sum, m) => sum + m.wallets.reduce((n, w) => n + w.govCents, 0), 0);
+        const body = members.length
+          ? `<p class="pay-total">全家共要付 <strong>${money(totalPay)}</strong><small>消費 ${money(totalGov * 3)}，用 ${money(totalGov)} 電子券</small></p>
+            ${members.map(m => `<section class="pay-member">
+              <h4><span>${escapeHtml(m.member)}</span><span>共付 ${money(m.payCents)}</span></h4>
+              <ul>${m.wallets.map(w => `<li>
+                <span class="pay-wallet"><strong>${escapeHtml(w.payment)}</strong><small>消費 ${money(w.spendCents)} · 用 ${money(w.govCents)} 券${w.count > 1 ? `（${w.count} 張）` : ''}</small></span>
+                <span class="pay-amount"><small>要付</small><strong>${money(w.payCents)}</strong></span>
+                <button class="button small" type="button" data-wallet-redemption data-member="${escapeHtml(m.member)}" data-payment="${escapeHtml(w.payment)}" aria-label="核銷 ${escapeHtml(m.member)} ${escapeHtml(w.payment)}：付 ${money(w.payCents)}">核銷</button>
+              </li>`).join('')}</ul>
+            </section>`).join('')}`
+          : '<p class="pay-done">本週電子券已全部用完 👍</p>';
+        return `<section class="dashboard-block pay-block${urgent && members.length ? ' is-urgent' : ''}" aria-label="用完電子券要付多少">
+          <div class="dashboard-block-head"><span class="dashboard-kicker">${urgent && members.length ? '⚠ 快到期' : '儲值'}</span><h3>用完電子券要付多少</h3>${urgent && members.length ? '' : `<span class="drawn-progress">${escapeHtml(when)}</span>`}</div>
+          ${urgent && members.length ? `<p class="urgent-line">${days <= 0 ? '今晚' : '明晚'} 23:59 後失效，請盡快使用。</p>` : ''}
+          ${body}
+          ${others.length ? `<p class="pay-note">另有商戶券／禮遇券（不計在內）：${escapeHtml(others.join('、'))}</p>` : ''}
+          <p class="pay-note">每張電子券要消費面額 3 倍；同一筆可一次用完同一錢包的所有電子券。</p>
         </section>`;
       }
 
@@ -1298,13 +1316,8 @@
         $('memberCompare').innerHTML = !summary.hasResults
           ? `<div class="empty dashboard-empty"><strong>本週尚無登記結果</strong><p>登記完整三次抽獎結果後，可在此查看待用券與實際消費。</p><button class="button" type="button" data-open-registration>前往登記</button></div>`
           : `<div class="dashboard-sections">
-              ${(() => { const days = daysUntilWeekEnd(); const unused = unusedWalletsMarkup(all); return days !== null && days <= 1 ? unused + drawnSummaryMarkup(all) : drawnSummaryMarkup(all) + unused; })()}
-              <section class="dashboard-block unused-block" aria-label="未使用的券">
-                <div class="dashboard-block-head"><span class="dashboard-kicker">消費前</span><h3>未使用的券</h3></div>
-                <p class="dashboard-main"><span>政府電子券面額</span><strong>${money(summary.unusedGovernmentCents)}</strong></p>
-                <div class="dashboard-pair"><p><span>最低購物額參考</span><strong>${money(summary.minimumSpendCents)}</strong></p><p><span>預計自付</span><strong>${money(summary.estimatedPayCents)}</strong></p></div>
-                <small>估算 · 僅計仍有效的政府券，購物額按面額 × 3；商戶券及禮遇券另計。</small>
-              </section>
+              ${payToUseMarkup(all)}
+              ${drawnSummaryMarkup(all)}
               <section class="dashboard-block used-block" aria-label="已使用的券">
                 <div class="dashboard-block-head"><span class="dashboard-kicker">消費後</span><h3>已使用的券</h3></div>
                 <p class="dashboard-main"><span>已記錄實際自付</span><strong>${money(summary.actualPaidCents)}</strong></p>
@@ -2097,7 +2110,7 @@
         const context = pendingWalletRedemption;
         const preselected = new Set(context.preselectedIds);
         $('redeemCouponPicker').hidden = false;
-        $('redeemCouponPicker').innerHTML = `<legend>本次使用的券 <small>政府券可多張；商戶券每單 1 張</small></legend>${context.candidates.map(coupon => {
+        $('redeemCouponPicker').innerHTML = `<legend>這次用的券 <small>商戶券每單 1 張</small></legend>${context.candidates.map(coupon => {
           const label = coupon.type === 'gov' ? `政府電子券 MOP ${formatMop(coupon.amount)}`
             : coupon.type === 'merchant' ? '商戶券 滿 100 減 12'
               : String(coupon.label || '消費禮遇券');
@@ -2118,7 +2131,9 @@
           $('redeemTransactions').innerHTML = '';
           $('redeemValidation').innerHTML = `<p>${escapeHtml($('walletRedeemStatus').textContent)}</p>`;
           $('redeemValidation').classList.add('invalid');
+          $('redeemValidation').hidden = false;
           $('confirmRedemption').disabled = true;
+          $('confirmRedemption').textContent = '確認核銷';
           return;
         }
         openRedemptionDialog(couponIds, [transaction], { keepDate: !initial });
@@ -2195,7 +2210,7 @@
 
         pendingRedemption = { ids, transactions: normalized, week: currentWeek };
         $('redeemDialogTitle').textContent = '確認核銷';
-        $('redeemDialogHint').textContent = '勾選這次用的券，金額會按券面額自動填好；如與支付平台紀錄不同再修改。';
+        $('redeemDialogHint').textContent = '';
         $('redeemDateField').hidden = false;
         if (!options.keepDate || !$('redeemDate').value) $('redeemDate').value = redemptionDateInputValue();
         $('redeemTransactions').innerHTML = normalized.map(transaction => {
@@ -2237,14 +2252,15 @@
           const showThresholdStatus = transaction.governmentAmountCents > 0 || merchantCoupons.length > 0;
           const thresholdStatus = showThresholdStatus ? `<p id="redeemThreshold-${transaction.index}" class="redeem-threshold-status" role="status" aria-live="polite"></p>` : '';
           const detailContent = `${couponGroups}${couponOrder}${rule}${thresholdStatus}`;
-          return `<section class="redeem-transaction">
-            <h3>${escapeHtml(transaction.member)} · ${escapeHtml(transaction.payment)}</h3>
-            <p class="hint">${canEstimate ? `已按券面額填入：支出 MOP ${formatMop(prefillSpend / CENTS)}，折扣 MOP ${formatMop(discountCents / CENTS)}，實付 MOP ${formatMop((prefillSpend - discountCents) / CENTS)}。如有不同請修改。` : '禮遇券沒有面額可推算，請按已完成交易填入實際金額。'}</p>
-            <label for="redeemSpend-${transaction.index}">支出金額（優惠前 MOP；必填）</label>
-            <input id="redeemSpend-${transaction.index}" class="control" data-redemption-amount="${transaction.index}" data-redemption-spend="${transaction.index}" data-discount-cents="${discountCents}" type="number" min="0" step="0.01" inputmode="decimal" required${canEstimate ? ` value="${formatInputCents(prefillSpend)}"` : ''}>
-            <label for="${amountId}">實付金額（MOP；必填）</label>
-            <input id="${amountId}" class="control" data-redemption-amount="${transaction.index}" data-redemption-paid="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" required${canEstimate ? ` value="${formatInputCents(prefillSpend - discountCents)}"` : ''}>
-            <details class="redeem-review-details"><summary>查看已選券與計算詳情</summary>${detailContent}</details>
+          return `<section class="redeem-transaction compact">
+            <div class="redeem-amounts">
+              <div><label for="redeemSpend-${transaction.index}">消費（優惠前）</label>
+              <input id="redeemSpend-${transaction.index}" class="control" data-redemption-amount="${transaction.index}" data-redemption-spend="${transaction.index}" data-discount-cents="${discountCents}" type="number" min="0" step="0.01" inputmode="decimal" required${canEstimate ? ` value="${formatInputCents(prefillSpend)}"` : ''}></div>
+              <div><label for="${amountId}">實付</label>
+              <input id="${amountId}" class="control" data-redemption-amount="${transaction.index}" data-redemption-paid="${transaction.index}" type="number" min="0" step="0.01" inputmode="decimal" required${canEstimate ? ` value="${formatInputCents(prefillSpend - discountCents)}"` : ''}></div>
+            </div>
+            <p class="hint">${canEstimate ? `券折扣 MOP ${formatMop(discountCents / CENTS)}，已按面額填好；與支付紀錄不同才需修改。` : '禮遇券沒有面額，請填實際金額。'}</p>
+            <details class="redeem-review-details"><summary>計算詳情</summary>${detailContent}</details>
           </section>`;
         }).join('');
         $('redeemValidation').innerHTML = '';
@@ -2327,7 +2343,10 @@
           if (spend !== null && paid !== null && paid > spend) failures.push('實付不可大於優惠前支出。');
           summaries.push(`<p class="redeem-summary-line">用 ${t.coupons.map(c => escapeHtml(couponName(c))).join('、')} · 支出 <strong>${spend === null ? '待填' : `MOP ${formatMop(spend / CENTS)}`}</strong> · 實付 <strong>${paid === null ? '待填' : `MOP ${formatMop(paid / CENTS)}`}</strong></p>`);
         }
-        $('redeemValidation').innerHTML = summaries.join('') + (failures.length ? `<p>${escapeHtml([...new Set(failures)].join(' '))}</p>` : '');
+        $('redeemValidation').innerHTML = failures.length ? `<p>${escapeHtml([...new Set(failures)].join(' '))}</p>` : '';
+        $('redeemValidation').hidden = !failures.length;
+        const totalPaid = amounts.filter(Number.isInteger).reduce((sum, value) => sum + value, 0);
+        $('confirmRedemption').textContent = !failures.length && amounts.every(Number.isInteger) ? `確認核銷（實付 MOP ${formatMop(totalPaid / CENTS)}）` : '確認核銷';
         $('redeemValidation').classList.toggle('invalid', failures.length > 0);
         $('confirmRedemption').disabled = failures.length > 0;
         return { valid: failures.length === 0, amounts, spends, estimates };
@@ -2758,24 +2777,8 @@
         return WEEKS[index].key;
       }
 
-      const devicesPath = 'access/devices';
-      let authUser = null;
-      let accessDenied = false;
-      let deviceOwner = '';
-      let deviceListReference = null;
-
-      function isPermissionError(error) {
-        return /permission/i.test(`${error?.code || ''} ${error?.message || error || ''}`);
-      }
-
-      function handleListenError(error) {
+      function handleListenError() {
         online = false;
-        if (isPermissionError(error)) {
-          accessDenied = true;
-          $('connection').textContent = '未登記此手機';
-          openDeviceGate();
-          return;
-        }
         $('connection').textContent = '離線（本機）';
       }
 
@@ -2787,7 +2790,6 @@
           coupons = sanitizeCoupons(data.coupons);
           invalidateAllPeriodStats();
           online = true;
-          accessDenied = false;
           $('connection').textContent = '已連線';
           localData[currentWeek] = { coupons };
           try { localStorage.setItem(cacheKey, JSON.stringify(localData)); } catch { /* 本機空間不足時仍保留雲端資料 */ }
@@ -2806,92 +2808,6 @@
             render();
           }
         }, () => {});
-        listenDevices();
-      }
-
-      function parseUserAgent(ua) {
-        const inner = (ua.match(/\(([^)]*)\)/) || ['', ''])[1];
-        const parts = inner.split(';').map(part => part.trim()).filter(Boolean);
-        let model = '', platform = '';
-        const android = ua.match(/Android ([\d.]+)/);
-        const ios = ua.match(/(?:iPhone|CPU) OS (\d+)_(\d+)/);
-        if (android) {
-          platform = `Android ${android[1]}`;
-          const candidate = [...parts].reverse().find(part => !/^(Linux|U|wv|K|HarmonyOS|Android [\d.]+|[a-z]{2}[-_][A-Za-z]{2})$/i.test(part)) || '';
-          model = candidate.replace(/\s*Build\/.*$/, '').trim();
-          if (/HarmonyOS/i.test(ua)) platform += '（鴻蒙）';
-        } else if (/iPhone/.test(ua)) { model = 'iPhone'; platform = ios ? `iOS ${ios[1]}.${ios[2]}` : 'iOS'; }
-        else if (/iPad/.test(ua)) { model = 'iPad'; platform = ios ? `iPadOS ${ios[1]}.${ios[2]}` : 'iPadOS'; }
-        else if (/Macintosh/.test(ua)) platform = 'Mac';
-        else if (/Windows/.test(ua)) platform = 'Windows';
-        return { model, platform };
-      }
-
-      async function describeDevice() {
-        const ua = navigator.userAgent || '';
-        const parsed = parseUserAgent(ua);
-        let hints = null;
-        try { hints = await navigator.userAgentData?.getHighEntropyValues?.(['model', 'platform', 'platformVersion']); } catch { /* 部分瀏覽器不提供型號 */ }
-        const model = hints?.model || parsed.model;
-        const platform = parsed.platform || [hints?.platform, hints?.platformVersion].filter(Boolean).join(' ');
-        return { model: model || '未知型號', platform: platform || '未知系統', userAgent: ua.slice(0, 300) };
-      }
-
-      async function openDeviceGate() {
-        if ($('deviceGate').open) return;
-        $('deviceOwner').innerHTML = MEMBERS.map(member => `<button type="button" class="filter-chip" data-device-owner="${escapeHtml(member)}" aria-pressed="${deviceOwner === member}">${escapeHtml(member)}</button>`).join('');
-        const info = await describeDevice();
-        $('deviceModel').textContent = `會一併記錄手機型號：${info.model}（${info.platform}）`;
-        $('deviceGateStatus').hidden = true;
-        $('deviceGate').showModal();
-        $('deviceCode').focus();
-      }
-
-      async function submitDeviceGate(event) {
-        event.preventDefault();
-        const code = $('deviceCode').value.trim();
-        const status = $('deviceGateStatus');
-        const say = (text, invalid) => { status.hidden = false; status.textContent = text; status.className = `notice ${invalid ? 'invalid' : 'neutral'}`; };
-        if (!/^\d{4,12}$/.test(code)) { say('請輸入 4 至 12 位數字。', true); return; }
-        if (!deviceOwner) { say('請選擇這是誰的手機。', true); return; }
-        if (!authUser || !database) { say('未能連線，請檢查網絡後再試。', true); return; }
-        $('deviceGateSubmit').disabled = true;
-        say('核對中…', false);
-        try {
-          const info = await describeDevice();
-          const now = Date.now();
-          await database.ref(`access/members/${code}/${authUser.uid}`).set(true);
-          await database.ref(`${devicesPath}/${authUser.uid}`).set({ label: `${deviceOwner}的手機`, owner: deviceOwner, ...info, registeredAt: now, lastSeenAt: now });
-          try { localStorage.setItem(`${cacheKey}:deviceOwner`, deviceOwner); } catch { /* 可忽略 */ }
-          $('deviceGate').close();
-          $('deviceCode').value = '';
-          accessDenied = false;
-          startDataListeners();
-          showToast('已登記這部手機，之後不用再輸入。');
-        } catch (error) {
-          say(isPermissionError(error) ? '數字碼不正確，請向家人確認後再輸入。' : '未能連線，請檢查網絡後再試。', true);
-        } finally {
-          $('deviceGateSubmit').disabled = false;
-        }
-      }
-
-      function listenDevices() {
-        if (!authUser || !database) { $('deviceSelf').textContent = ''; return; }
-        if (deviceListReference) deviceListReference.off();
-        deviceListReference = database.ref(devicesPath);
-        deviceListReference.on('value', snapshot => {
-          const devices = Object.entries(snapshot.val() || {}).filter(([, d]) => d && typeof d === 'object');
-          const mine = devices.find(([uid]) => uid === authUser.uid)?.[1];
-          if (mine && !listenDevices.touched) {
-            listenDevices.touched = true;
-            database.ref(`${devicesPath}/${authUser.uid}/lastSeenAt`).set(Date.now()).catch(() => {});
-          }
-          $('deviceSelf').textContent = mine ? `這部手機：${mine.label || ''}（${mine.model || '未知型號'}）` : devices.length ? '' : '家庭數字碼尚未啟用；開啟方法見 FIREBASE_SETUP.md。';
-          const date = ms => Number.isFinite(ms) ? new Intl.DateTimeFormat('zh-Hant', { timeZone: 'Asia/Macau', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(ms)) : '—';
-          $('deviceList').innerHTML = devices.length ? `<h3>已登記的手機（${devices.length}）</h3><ul>${devices
-            .sort(([, a], [, b]) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0))
-            .map(([uid, d]) => `<li><span><strong>${escapeHtml(d.label || '未命名')}</strong><small>${escapeHtml(d.model || '未知型號')} · ${escapeHtml(d.platform || '')} · 最近使用 ${date(d.lastSeenAt)}</small></span>${uid === authUser.uid ? '<em>這部</em>' : `<button type="button" class="text-button delete-link" data-remove-device="${escapeHtml(uid)}" data-label="${escapeHtml(d.label || '')}">移除</button>`}</li>`).join('')}</ul>` : '';
-        }, () => { $('deviceList').innerHTML = ''; });
       }
 
       function initializeFirebase() {
@@ -2902,16 +2818,7 @@
         try {
           if (!firebase.apps.length) firebase.initializeApp(CONFIG);
           database = firebase.database();
-          try { deviceOwner = localStorage.getItem(`${cacheKey}:deviceOwner`) || ''; } catch { deviceOwner = ''; }
-          const auth = typeof firebase.auth === 'function' ? firebase.auth() : null;
-          if (!auth) { startDataListeners(); return; }
-          let started = false;
-          const start = () => { if (!started) { started = true; startDataListeners(); } };
-          auth.onAuthStateChanged(user => {
-            authUser = user || null;
-            if (user) start();
-          });
-          auth.signInAnonymously().catch(() => start()); // 未啟用匿名登入時沿用現有方式
+          startDataListeners();
         } catch {
           $('connection').textContent = '離線（本機）';
         }
@@ -2944,7 +2851,7 @@
         invalidateAllPeriodStats();
         coupons = sanitizeCoupons(localData[currentWeek]?.coupons);
         render();
-        if (database && !accessDenied) listenWeek();
+        if (database) listenWeek();
       });
 
       $('recordMember').addEventListener('change', () => {
@@ -3154,22 +3061,6 @@
         if (button.dataset.action === 'redeem') openWalletRedemption(coupon.member, coupon.payment, { preselectedIds: [id] });
       });
 
-      $('deviceGateForm').addEventListener('submit', submitDeviceGate);
-      $('deviceGate').addEventListener('cancel', event => event.preventDefault());
-      $('deviceOwner').addEventListener('click', event => {
-        const button = event.target.closest('[data-device-owner]');
-        if (!button) return;
-        deviceOwner = button.dataset.deviceOwner;
-        $('deviceOwner').querySelectorAll('[data-device-owner]').forEach(node => node.setAttribute('aria-pressed', String(node === button)));
-      });
-      $('deviceList').addEventListener('click', event => {
-        const button = event.target.closest('[data-remove-device]');
-        if (!button || !database) return;
-        if (!window.confirm(`移除「${button.dataset.label || '此手機'}」？該手機下次打開要重新輸入家庭數字碼。`)) return;
-        database.ref(`${devicesPath}/${button.dataset.removeDevice}`).set(null)
-          .then(() => showToast('已移除該手機。'))
-          .catch(() => showToast('未能移除，請稍後再試。'));
-      });
       $('export').addEventListener('click', exportBackup);
       $('import').addEventListener('change', importBackup);
       document.querySelectorAll('[data-nav]').forEach(button => button.addEventListener('click', () => setActivePanel(button.dataset.nav)));
