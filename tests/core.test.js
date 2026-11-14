@@ -63,7 +63,7 @@ test('plan: one wallet is enough and takes the whole price', () => {
 
 test('plan: splits across wallets to use the most vouchers', () => {
   const result = Core.plan(Core.wallets(family), 400);
-  assert.equal(result.face, 130); // 110 + 20; 400 / 3 = 133
+  assert.equal(result.off, 130); // 110 + 20; 400 / 3 = 133
   assert.equal(result.pay, 270);
   assert.equal(result.payments.reduce((total, p) => total + p.spend, 0), 400);
   assert.equal(result.payments.length, 2);
@@ -92,4 +92,28 @@ test('plan: exact threshold and cents', () => {
 test('plan: no vouchers at all', () => {
   const result = Core.plan([], 100);
   assert.deepEqual([result.payments.length, result.face, result.pay, result.left, result.full, result.least], [0, 0, 100, 0, 0, 0]);
+});
+
+test('merchant coupons are ignored unless asked for', () => {
+  assert.equal(Core.wallets(family).some(w => w.merchantId), false);
+  const list = Core.wallets(family, { merchant: true });
+  assert.deepEqual(list.map(w => [w.member, w.payment, w.face, Boolean(w.merchantId)]).at(-1), ['昌哥', 'UEPay', 0, true]);
+  assert.equal(Core.plan(Core.wallets(family), 100).off, 30); // 20 + 10 e-vouchers only
+});
+
+test('plan with a merchant coupon: MOP 12 off MOP 100, then e-vouchers on what is left', () => {
+  const both = { g: coupon('媽媽', '大豐', 20), m: coupon('媽媽', '大豐', 12, false, 'merchant') };
+  let result = Core.plan(Core.wallets(both, { merchant: true }), 100);
+  assert.deepEqual([result.off, result.face, result.pay, result.payments[0].merchant], [32, 20, 68, true]);
+  assert.deepEqual(result.payments[0].ids.sort(), ['g', 'm']);
+  result = Core.plan(Core.wallets(both, { merchant: true }), 99); // under MOP 100: e-voucher only
+  assert.deepEqual([result.off, result.payments[0].merchant, result.payments[0].ids], [20, false, ['g']]);
+  const big = { g: coupon('媽媽', '大豐', 50), m: coupon('媽媽', '大豐', 12, false, 'merchant') };
+  result = Core.plan(Core.wallets(big, { merchant: true }), 155); // 155 − 12 = 143 < 150, so pick whichever saves more
+  assert.equal(result.off, 50);
+  result = Core.plan(Core.wallets(big, { merchant: true }), 162);
+  assert.deepEqual([result.off, result.pay], [62, 100]);
+  const only = { m: coupon('昌哥', 'UEPay', 12, false, 'merchant') };
+  result = Core.plan(Core.wallets(only, { merchant: true }), 120);
+  assert.deepEqual([result.off, result.face, result.pay, result.least, result.payments[0].spend], [12, 0, 108, 100, 120]);
 });

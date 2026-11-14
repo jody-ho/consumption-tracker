@@ -11,7 +11,7 @@
 - 週五至週日抽獎，每個錢包每週 3 次；電子券面額 10／20／50／100／200。
 - 電子券在該週週四 23:59 到期。
 - 付款滿面額 3 倍自動扣減；同一錢包多張券由大至小逐張扣。
-- 商戶券、禮遇券不記錄、不提醒。
+- 商戶券（滿 100 減 12，每筆一張，先扣）和禮遇券可以登記，但不計入首頁的數字和提醒；輸入價錢後勾選「這間店可用商戶券」才納入計算。
 
 ## 檔案
 
@@ -29,7 +29,7 @@
 
 Firebase Realtime Database：
 
-- `campaigns/2026R2/weeks/<週>/coupons/<id>`：`{ member, payment, type: "gov" | "zero", amount, used, usedAt, createdAt, redemption }`
+- `campaigns/2026R2/weeks/<週>/coupons/<id>`：`{ member, payment, type: "gov" | "merchant" | "gift" | "zero", amount, used, usedAt, createdAt, redemption }`
 - `campaigns/2026R2/settings/wallets/<家人>/<錢包>`：`true | false`
 
 ## 測試

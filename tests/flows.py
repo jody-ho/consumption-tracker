@@ -49,8 +49,8 @@ with sync_playwright() as p:
     listing = text(page, '#useList')
     for expected in ('給商家 自付', '全家 630 420', '爸爸 MPay 券 20 60 40', '媽媽 240 160', '工銀 券 50 + 10 180 120', '大豐 券 20 60 40', '姐姐 中銀 券 100 + 10 330 220'):
         assert expected in listing, (expected, listing)
-    assert '昌哥' not in listing and '商戶' not in page.locator('body').inner_text() and '禮遇' not in page.locator('body').inner_text()
-    assert text(page, '#usedSummary') == '已用 MOP 50'
+    assert '昌哥' not in listing and '商戶' not in page.locator('#use').inner_text() and '禮遇' not in page.locator('#use').inner_text()
+    assert text(page, '#usedSummary') == '已用電子券 MOP 50'
     assert text(page, '#badge') == '18'
     assert page.locator('#verdict').is_hidden() and page.locator('#markPlan').is_hidden()
     assert fits(page)
@@ -60,12 +60,19 @@ with sync_playwright() as p:
     page.locator('#price').fill('25')
     assert text(page, '#verdict') == '未滿 MOP 30，用不到券' and page.locator('#markPlan').is_hidden()
     page.locator('#price').fill('700')
-    assert text(page, '#verdict') == '券減 MOP 210，全部用完' and '合計 700 490' in text(page, '#useList')
+    assert text(page, '#verdict') == '券減 MOP 210，電子券全部用完' and '合計 700 490' in text(page, '#useList')
     page.locator('#price').fill('400')
-    assert text(page, '#verdict') == '券減 MOP 130，還剩 MOP 80 買滿 MOP 630 才全部用完'
+    assert text(page, '#verdict') == '券減 MOP 130，電子券還剩 MOP 80 買滿 MOP 630 才全部用完'
     assert page.locator('#useList .row').count() == 3 and '合計 400 270' in text(page, '#useList')
     assert page.locator('#useList button').count() == 0
+    # Merchant coupons join the plan only when the shop takes them.
+    assert page.locator('#merchantBox').is_visible() and '商戶券' not in text(page, '#useList')
+    page.locator('#merchantOk').check()
+    assert text(page, '#verdict').startswith('券減 MOP 132，') and '商戶券 12' in text(page, '#useList') and '合計 400 268' in text(page, '#useList')
+    page.locator('#merchantOk').uncheck()
+    assert '合計 400 270' in text(page, '#useList')
     page.locator('#clearPrice').click()
+    assert page.locator('#merchantBox').is_hidden()
     assert page.locator('#verdict').is_hidden() and '全家 630 420' in text(page, '#useList') and page.locator('#clearPrice').is_hidden()
     print('2 plan a purchase PASS')
 
@@ -79,6 +86,16 @@ with sync_playwright() as p:
     assert saved['used'] is True and saved['redemption']['actualSpendCents'] - saved['redemption']['actualPaidCents'] == 11000
     page.locator('#toast button').click()
     assert text(page, '#hero') == 'MOP 210' and writes(page) == 2
+    page.locator('#price').fill('400'); page.locator('#merchantOk').check()
+    page.locator('#markPlan').click()
+    assert page.evaluate("window.__db.root.campaigns['2026R2'].weeks['2026R2-W1'].coupons.d2.used") is True
+    assert '已記為已用：券 MOP 132' in text(page, '#toast') and not page.locator('#merchantBox').is_visible()
+    page.locator('#usedBox summary').click()
+    assert '媽媽 · 大豐 券 20 + 商戶券' in text(page, '#usedList')
+    page.locator('#usedBox summary').click()
+    page.locator('#toast button').click()
+    assert page.evaluate("window.__db.root.campaigns['2026R2'].weeks['2026R2-W1'].coupons.d2.used") is False
+    assert text(page, '#hero') == 'MOP 210' and writes(page) == 4
     print('3 submit plan and undo PASS')
 
     # 4. One wallet: open, back out three ways, then confirm and undo from the used list.
@@ -88,12 +105,12 @@ with sync_playwright() as p:
     assert text(page, '#sheetBody') == '給商家 MOP 180 券減 MOP 60 自付 MOP 120'
     page.go_back()
     page.wait_for_function("!document.querySelector('#sheet').open")
-    assert page.locator('#use').is_visible() and writes(page) == 2
+    assert page.locator('#use').is_visible() and writes(page) == 4
     row.click(); page.keyboard.press('Escape'); page.wait_for_function("!document.querySelector('#sheet').open")
     row.click(); page.locator('#sheetCancel').click(); page.wait_for_function("!document.querySelector('#sheet').open")
-    assert writes(page) == 2
+    assert writes(page) == 4
     row.click(); page.locator('#sheetOk').click()
-    assert text(page, '#hero') == 'MOP 150' and text(page, '#usedSummary') == '已用 MOP 110'
+    assert text(page, '#hero') == 'MOP 150' and text(page, '#usedSummary') == '已用電子券 MOP 110'
     page.wait_for_function("!history.state")
     page.locator('#usedBox summary').click()
     page.locator('#usedList .row', has_text='媽媽').locator('button').click()
@@ -104,7 +121,7 @@ with sync_playwright() as p:
     page.locator('.tabs [data-tab="register"]').click()
     assert page.locator('#register').is_visible() and page.locator('#use').is_hidden()
     assert text(page, '#regCaption') == '已登記 5 / 23'
-    assert '工銀 50 · 10 · —' in text(page, '#regList') and '大豐 20 · — · —' in text(page, '#regList')
+    assert '工銀 50 · 10 · —' in text(page, '#regList') and '大豐 20 · 商戶 · —' in text(page, '#regList') and '中銀 100 · 10 · 禮遇' in text(page, '#regList')
     page.go_back()
     assert page.locator('#use').is_visible()
     page.go_forward()
@@ -116,17 +133,17 @@ with sync_playwright() as p:
     page.locator('[data-reg="媽媽|MPay"]').click()
     assert page.locator('#sheetOk').is_disabled()
     page.locator('input[name="draw0"][value="20"]').check(force=True)
-    page.locator('input[name="draw1"][value="none"]').check(force=True)
+    page.locator('input[name="draw1"][value="zero"]').check(force=True)
     assert page.locator('#sheetOk').is_disabled()
     page.go_back()  # leaving without saving writes nothing
     page.wait_for_function("!document.querySelector('#sheet').open")
     assert writes(page) == before and page.locator('#register').is_visible()
     page.locator('[data-reg="媽媽|MPay"]').click()
-    for index, value in enumerate(('20', 'none', '100')):
+    for index, value in enumerate(('20', 'merchant', '100')):
         page.locator(f'input[name="draw{index}"][value="{value}"]').check(force=True)
     page.locator('#sheetOk').click()
     assert '已儲存：媽媽 · MPay' in text(page, '#toast')
-    assert 'MPay 20 · — · 100' in text(page, '#regList') and text(page, '#regCaption') == '已登記 6 / 23' and text(page, '#badge') == '17'
+    assert 'MPay 20 · 商戶 · 100' in text(page, '#regList') and text(page, '#regCaption') == '已登記 6 / 23' and text(page, '#badge') == '17'
     assert writes(page) == before + 1
     page.wait_for_function("!history.state")
     page.locator('[data-reg="媽媽|MPay"]').click()
@@ -135,7 +152,7 @@ with sync_playwright() as p:
     page.locator('#sheetOk').click()
     change = page.evaluate('Object.values(window.__db.writes.at(-1).changes)')
     assert len(change) == 6 and change.count(None) == 3
-    assert 'MPay 20 · — · 10' in text(page, '#regList')
+    assert 'MPay 20 · 商戶 · 10' in text(page, '#regList')
     page.wait_for_function("!history.state")
     page.locator('[data-reg="昌哥|MPay"]').click()
     assert page.locator('#sheetOk').is_hidden() and text(page, '#sheetCancel') == '關閉'
