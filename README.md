@@ -32,6 +32,14 @@ Firebase Realtime Database：
 - `campaigns/2026R2/weeks/<週>/coupons/<id>`：`{ member, payment, type: "gov" | "merchant" | "gift" | "zero", amount, used, usedAt, createdAt, redemption }`
 - `campaigns/2026R2/settings/wallets/<家人>/<錢包>`：`true | false`
 
+## 先試用再發佈
+
+```
+python3 tests/preview.py      # 打開 http://localhost:8800/
+```
+
+用假資料開啟網站，不會讀寫正式的 Firebase；右上角會顯示「試用版・假資料」。同一個 Wi-Fi 下的手機可打開 `http://<電腦的 IP>:8800/`。試用資料留在瀏覽器裡，`/?reset` 還原成範例。
+
 ## 測試
 
 ```
