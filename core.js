@@ -42,6 +42,14 @@
     }).reverse();
   }
 
+  // The smallest payment that uses these coupons: each e-voucher needs face × 3; a merchant coupon needs MOP 100 and comes off first.
+  function estimate(faces, merchant) {
+    const face = sum(faces, value => value);
+    const off = face + (merchant ? MERCHANT.off : 0);
+    const spend = Math.max(face * MULTIPLE + (merchant ? MERCHANT.off : 0), merchant ? MERCHANT.min : 0);
+    return { off, spend, pay: spend - off };
+  }
+
   // Used coupons, one entry per payment made. `records` are stored rows, each with its `id`.
   // Amounts are the ones saved with the payment; rows saved without them get the smallest spend that fits.
   function payments(records) {
@@ -56,10 +64,8 @@
       groups.set(key, group);
     }
     return [...groups.values()].map(({ saved, ...group }) => {
-      const off = group.face + (group.merchant ? MERCHANT.off : 0);
-      const spend = saved ? saved.actualSpendCents / 100
-        : Math.max(group.face * MULTIPLE + (group.merchant ? MERCHANT.off : 0), group.merchant ? MERCHANT.min : 0);
-      return { ...group, off, spend, pay: saved ? saved.actualPaidCents / 100 : spend - off };
+      const guess = estimate(group.faces, group.merchant);
+      return { ...group, off: guess.off, spend: saved ? saved.actualSpendCents / 100 : guess.spend, pay: saved ? saved.actualPaidCents / 100 : guess.pay };
     });
   }
 
@@ -179,7 +185,7 @@
     };
   }
 
-  const api = { MEMBERS, WALLETS, FACES, MULTIPLE, MERCHANT, START, END, macauDate, week, weeks, payments, tally, luck, applied, wallets, plan };
+  const api = { MEMBERS, WALLETS, FACES, MULTIPLE, MERCHANT, START, END, macauDate, week, weeks, estimate, payments, tally, luck, applied, wallets, plan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

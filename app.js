@@ -42,6 +42,8 @@
   let db = null;
   let sheetAction = null;
   let sheetChange = null; // called when something in the open sheet is ticked or unticked
+  let sheetBack = null; // where the cancel button of a sheet opened from another sheet leads
+  let sheetStay = false; // saving leaves the sheet open
   let toastTimer = null;
 
   // ---------- data ----------
@@ -81,6 +83,7 @@
   const cells = (...values) => `<span>${values.map(num).join('</span><span>')}</span>`;
   const MONEY = ['給商家', '自付']; // what the shop is paid, and what comes out of pocket after the coupons
   const HISTORY = ['抽中', ...MONEY]; // past weeks also show the e-voucher value drawn
+  const whole = (...values) => cells(...values.map(Math.round)); // three numbers share a row there, so no cents
   const readout = lines => `<dl class="readout">${lines.map(([label, value, big]) => `<div${big ? ' class="big"' : ''}><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
   // One card per family member (`data-m` picks the member's colour): the name with the column names beside it,
   // so the numbers stay labelled however far the page is scrolled; then the member's rows, and a subtotal line when there are several.
@@ -138,27 +141,31 @@
   }
 
   // `updates` are paths under this week, e.g. { 'coupons/<id>/used': true }.
-  function write(updates, message, undo) {
-    if (!db || !state.week) { toast('未能連線，請稍後再試'); return; }
+  // An earlier week can be named; with no `message` the screen itself shows the result.
+  function write(updates, message, undo, weekKey = state.week?.key) {
+    if (!db || !weekKey) { toast('未能連線，請稍後再試'); return; }
     if (!state.online) toast('離線中，連線後會自動儲存');
-    db.ref(`${ROOT}/weeks/${state.week.key}`).update(updates).then(
-      () => toast(message, undo),
-      () => toast('儲存失敗，請再試一次')
+    db.ref(`${ROOT}/weeks/${weekKey}`).update(updates).then(
+      () => { if (message) toast(message, undo); },
+      () => { if ($('sheet').open) $('sheet').close(); toast('儲存失敗，請再試一次'); } // the toast sits under an open sheet
     );
   }
+
+  // What is stored with the coupons of one payment.
+  const redemption = (payment, transactionId, date = Core.macauDate()) => ({
+    date, transactionId, amountKind: 'actual', amountSource: 'coupon-face-value',
+    actualSpendCents: Math.round(payment.spend * 100), actualPaidCents: Math.round(payment.pay * 100)
+  });
 
   function markUsed(payments) {
     const now = Date.now();
     const updates = {};
     payments.forEach((payment, index) => {
-      const redemption = {
-        date: Core.macauDate(), transactionId: `${now}-${index}`, amountKind: 'actual', amountSource: 'coupon-face-value',
-        actualSpendCents: Math.round(payment.spend * 100), actualPaidCents: Math.round(payment.pay * 100)
-      };
+      const stored = redemption(payment, `${now}-${index}`);
       for (const id of payment.ids) {
         updates[`coupons/${id}/used`] = true;
         updates[`coupons/${id}/usedAt`] = now;
-        updates[`coupons/${id}/redemption`] = redemption;
+        updates[`coupons/${id}/redemption`] = stored;
       }
     });
     const ids = payments.flatMap(payment => payment.ids);
@@ -241,9 +248,10 @@
     const used = Core.payments(records(state.coupons));
     $('usedBox').hidden = !used.length;
     $('usedSummary').textContent = `已用電子券 ${mop(sum(used, p => p.face))}`;
+    const paid = mine => whole(sum(mine, p => p.spend), sum(mine, p => p.pay)); // real amounts can have cents; the list shows whole MOP
     $('usedList').innerHTML = columns
-      + `<div class="row total"><span>全家</span>${subtotal(used)}</div>`
-      + byMember(used, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</button>`, subtotal, MONEY);
+      + `<div class="row total"><span>全家</span>${paid(used)}</div>`
+      + byMember(used, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${paid([p])}</button>`, paid, MONEY);
   }
 
   // The best way to pay the price typed in, using only the ticked family members' coupons.
@@ -306,7 +314,7 @@
     // Every week so far: e-voucher value drawn and used.
     const weeks = Core.weeks(Core.macauDate());
     const tallies = weeks.map(week => Core.tally(records(state.weeks[week.key])));
-    const weekRow = (key, label, won, spend, pay, total) => `<button class="row${total ? ' total' : ''}" type="button" data-week="${key}" aria-label="${label.replace(/<.*/, '')}：抽中 ${mop(won)}，給商家 ${mop(spend)}，自付 ${mop(pay)}"><span>${label}</span>${cells(won, spend, pay)}</button>`;
+    const weekRow = (key, label, won, spend, pay, total) => `<button class="row${total ? ' total' : ''}" type="button" data-week="${key}" aria-label="${label.replace(/<.*/, '')}：抽中 ${mop(won)}，給商家 ${mop(spend)}，自付 ${mop(pay)}"><span>${label}</span>${whole(won, spend, pay)}</button>`;
     $('weeksBox').hidden = !weeks.length;
     $('weekList').innerHTML = head(...HISTORY)
       + weekRow('all', '全期', sum(tallies, t => t.won), sum(tallies, t => t.spend), sum(tallies, t => t.pay), true)
@@ -327,7 +335,7 @@
     const all = sets.flat();
     // Totals of the rows that pass `keep`, added up week by week because a payment belongs to one week.
     const total = (field, keep = () => true) => sum(sets, set => Core.tally(set.filter(keep))[field]);
-    const figures = keep => cells(total('won', keep), total('spend', keep), total('pay', keep));
+    const figures = keep => whole(total('won', keep), total('spend', keep), total('pay', keep));
     const luck = Core.luck(all);
     const top = entry => `${esc(entry.name)} · ${mop(entry.won)}`;
     const wallets = MEMBERS.flatMap(member => WALLETS.map(payment => ({ member, payment, draws: all.filter(c => c.member === member && c.payment === payment) }))).filter(w => w.draws.length);
@@ -337,10 +345,51 @@
         ['抽中', mop(total('won'))], ['已用', mop(total('used'))], ['給商家', mop(total('spend'))], ['自付', mop(total('pay'))],
         ...(luck.member ? [['手氣王', top(luck.member)]] : []), ...(luck.wallet ? [['最旺錢包', top(luck.wallet)]] : []),
         ...(luck.merchant ? [['商戶券', `${luck.merchant} 張`]] : []), ...(luck.gift ? [['禮遇券', `${luck.gift} 張`]] : [])
-      ]) + byMember(wallets, w => `<div class="row"><span>${esc(w.payment)}${week ? drawTags(w.draws) : ''}</span>${figures(c => c.member === w.member && c.payment === w.payment)}</div>`,
-        mine => figures(c => c.member === mine[0].member), HISTORY),
+      ]) + byMember(wallets, w => {
+        const inside = `<span>${esc(w.payment)}${week ? drawTags(w.draws) : ''}</span>${figures(c => c.member === w.member && c.payment === w.payment)}`;
+        // In one week, a wallet with coupons opens so that a forgotten payment can be recorded.
+        return week && w.draws.some(usable)
+          ? `<button class="row" type="button" data-past="${key}|${esc(w.member)}|${esc(w.payment)}">${inside}</button>` : `<div class="row">${inside}</div>`;
+      }, mine => figures(c => c.member === mine[0].member), HISTORY),
       ok: ''
     });
+  }
+
+  const usable = c => c.type === 'gov' || c.type === 'merchant';
+
+  // A wallet in one week: tick the coupons that were really used. For payments nobody recorded at the time, and for taking one back.
+  // Saving returns to the week, which shows the result.
+  function openPastSheet(key, member, payment) {
+    const week = Core.weeks(Core.macauDate()).find(w => w.key === key);
+    const coupons = records(state.weeks[key]).filter(c => c.member === member && c.payment === payment && usable(c));
+    const boxes = () => [...$('sheetBody').querySelectorAll('input')];
+    const added = () => coupons.filter((c, index) => boxes()[index].checked && !c.used);
+    const dropped = () => coupons.filter((c, index) => !boxes()[index].checked && c.used);
+    const guess = list => Core.estimate(list.filter(c => c.type === 'gov').map(c => c.amount), list.some(c => c.type === 'merchant'));
+    const back = () => openWeekSheet(key);
+    const change = () => {
+      const now = guess(added());
+      boxes()[0].setCustomValidity(added().length || dropped().length ? '' : 'nothing changed');
+      $('figures').innerHTML = readout([['給商家', mop(now.spend)], ['券減', mop(now.off)], ['自付', mop(now.pay), true]]);
+    };
+    openSheet({
+      title: `${weekName(week)} · ${member} · ${payment}`,
+      body: `<fieldset class="chips" aria-label="用過哪幾張券">${coupons.map(c =>
+        `<label><input type="checkbox"${c.used ? ' checked' : ''}><span>${c.type === 'gov' ? c.amount : '商戶'}</span></label>`).join('')}</fieldset><div id="figures"></div>`,
+      ok: '儲存', back, stay: true, change,
+      action: () => {
+        const now = Date.now();
+        const today = Core.macauDate();
+        const stored = redemption(guess(added()), `${now}-0`, today < week.end ? today : week.end);
+        const updates = {};
+        for (const c of added()) Object.assign(updates, { [`coupons/${c.id}/used`]: true, [`coupons/${c.id}/usedAt`]: now, [`coupons/${c.id}/redemption`]: stored });
+        for (const c of dropped()) Object.assign(updates, { [`coupons/${c.id}/used`]: false, [`coupons/${c.id}/usedAt`]: null, [`coupons/${c.id}/redemption`]: null });
+        write(updates, '', null, key);
+        back();
+      }
+    });
+    change();
+    updateSheetOk();
   }
 
   // Everything as one file, in the same shape as the database.
@@ -375,18 +424,23 @@
 
   // ---------- sheet, toast, navigation ----------
 
-  function openSheet({ title, body, ok, action, change }) {
+  // `back` turns the cancel button into a way back to the sheet before; `stay` keeps the sheet open when saving.
+  function openSheet({ title, body, ok, action, change, back, stay }) {
     $('sheetTitle').textContent = title;
     $('sheetBody').innerHTML = body;
     $('sheetOk').textContent = ok;
     $('sheetOk').hidden = !ok;
-    $('sheetCancel').textContent = ok ? '取消' : '關閉';
+    $('sheetCancel').textContent = back ? '返回' : ok ? '取消' : '關閉';
     sheetAction = action;
     sheetChange = change;
+    sheetBack = back;
+    sheetStay = stay;
     updateSheetOk();
-    $('sheet').showModal();
+    if (!$('sheet').open) {
+      $('sheet').showModal();
+      history.pushState({ sheet: true }, ''); // so the phone's back button closes the sheet
+    }
     $('sheet').scrollTop = 0; // a long sheet opens at its top, not at the focused button
-    history.pushState({ sheet: true }, ''); // so the phone's back button closes the sheet
   }
 
   function updateSheetOk() {
@@ -466,13 +520,18 @@
   $('sheetForm').addEventListener('submit', event => {
     event.preventDefault();
     const action = sheetAction;
-    $('sheet').close();
+    if (!sheetStay) $('sheet').close();
     if (action) action($('sheetForm'));
   });
-  $('sheetCancel').addEventListener('click', () => $('sheet').close());
+  $('sheetCancel').addEventListener('click', () => { if (sheetBack) sheetBack(); else $('sheet').close(); });
+  $('sheetBody').addEventListener('click', event => {
+    const row = event.target.closest('[data-past]');
+    if (row) openPastSheet(...row.dataset.past.split('|'));
+  });
   $('sheet').addEventListener('click', event => { if (event.target === $('sheet')) $('sheet').close(); });
   $('sheet').addEventListener('close', () => {
-    sheetAction = null;
+    sheetAction = sheetChange = sheetBack = null;
+    sheetStay = false;
     if (history.state?.sheet) history.back();
   });
   window.addEventListener('popstate', () => {

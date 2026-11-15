@@ -40,6 +40,8 @@ def open_page(browser, now, width=375):
 text = lambda page, selector: ' '.join(page.locator(selector).inner_text().split())
 writes = lambda page: page.evaluate('window.__db.writes.length')
 fits = lambda page: page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+# Numbers and names that spill out of their column (and so sit on top of their neighbour), among what is on screen.
+spills = lambda page: page.evaluate("[...document.querySelectorAll('.row > span, .cols > span, .person h3 > span')].filter(e => e.offsetParent && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
 SAT = datetime(2026, 10, 10, 4, tzinfo=timezone.utc)
 
 with sync_playwright() as p:
@@ -275,7 +277,34 @@ with sync_playwright() as p:
     sheet = text(page, '#sheetBody')
     for expected in ('抽中 MOP 260 已用 MOP 50 給商家 MOP 150 自付 MOP 100 手氣王 姐姐 · MOP 110 最旺錢包 中銀 · MOP 110 商戶券 1 張 禮遇券 1 張 爸爸 抽中 給商家 自付 MPay 20 — — 20 0 0', '媽媽 抽中 給商家 自付 工銀 50 10 — 60 0 0 大豐 20 商戶 — 20 0 0 小計 80 0 0', '姐姐 抽中 給商家 自付 中銀 100 10 禮遇 110 0 0', '昌哥 抽中 給商家 自付 MPay 50 — — 50 150 100'):
         assert expected in sheet, (expected, sheet)
-    assert page.locator('#sheetBody button, #sheetBody input').count() == 0
+    assert page.locator('#sheetBody input').count() == 0
+    # A payment nobody recorded at the time: open the wallet inside the week, tick the coupon, save. Then take it back.
+    past = "window.__db.root.campaigns['2026R2'].weeks['2026R2-W1'].coupons"
+    page.locator('[data-past="2026R2-W1|媽媽|工銀"]').click()
+    assert text(page, '#sheetTitle') == '第 1 週 · 媽媽 · 工銀' and text(page, '#sheetCancel') == '返回'
+    assert page.locator('#sheetBody input').count() == 2 and page.locator('#sheetBody input:checked').count() == 0 and page.locator('#sheetOk').is_disabled()
+    page.locator('#sheetCancel').click()  # back to the week, nothing written
+    assert text(page, '#sheetTitle') == '第 1 週 · 10/9 – 10/15' and writes(page) == 0
+    page.locator('[data-past="2026R2-W1|媽媽|工銀"]').click()
+    page.locator('#sheetBody input').nth(0).check(force=True)
+    assert text(page, '#figures') == '給商家 MOP 150 券減 MOP 50 自付 MOP 100'
+    page.locator('#sheetOk').click()
+    assert text(page, '#sheetTitle') == '第 1 週 · 10/9 – 10/15' and '工銀 50 10 — 60 150 100' in text(page, '#sheetBody') and '已用 MOP 100' in text(page, '#sheetBody')
+    assert page.evaluate(f'{past}.b1.used') is True and page.evaluate(f'{past}.b2.used') is False and writes(page) == 1
+    assert page.evaluate(f'{past}.b1.redemption.date') == '2026-10-15' and page.evaluate(f'{past}.b1.redemption.actualPaidCents') == 10000
+    assert page.evaluate('window.__db.writes.at(-1).path') == 'campaigns/2026R2/weeks/2026R2-W1'
+    page.locator('[data-past="2026R2-W1|媽媽|工銀"]').click()
+    assert page.locator('#sheetBody input:checked').count() == 1 and page.locator('#sheetOk').is_disabled()
+    page.locator('#sheetBody input').nth(0).uncheck(force=True)
+    page.locator('#sheetOk').click()
+    assert page.evaluate(f'{past}.b1.used') is False and page.evaluate(f"'redemption' in {past}.b1") is False and writes(page) == 2
+    assert '工銀 50 10 — 60 0 0' in text(page, '#sheetBody')
+    page.locator('[data-past="2026R2-W1|媽媽|大豐"]').click()  # a merchant coupon counts too
+    for index in (0, 1):
+        page.locator('#sheetBody input').nth(index).check(force=True)
+    assert text(page, '#figures') == '給商家 MOP 100 券減 MOP 32 自付 MOP 68'
+    page.locator('#sheetCancel').click()
+    assert writes(page) == 2
     page.go_back()
     page.wait_for_function("!document.querySelector('#sheet').open")
     assert page.locator('#register').is_visible() and page.locator('#weekList').is_visible()
@@ -292,7 +321,7 @@ with sync_playwright() as p:
     assert download.value.suggested_filename == '消費券備份-2026-10-16.json' and '已匯出備份' in text(page, '#toast')
     backup = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
     assert backup['weeks']['2026R2-W1']['coupons']['e1']['amount'] == 100 and backup['settings']['wallets']['爸爸']['MPay'] is True
-    assert writes(page) == 0 and fits(page)
+    assert writes(page) == 2 and fits(page)
     page.close()
     page = open_page(browser, datetime(2026, 10, 14, 4, tzinfo=timezone.utc))
     assert text(page, '#caption') == '本週未用電子券 · 明晚到期'
@@ -304,6 +333,10 @@ with sync_playwright() as p:
     assert page.locator('[data-week]').count() == 11 and '本週' not in text(page, '#weekList') and '第 10 週 12/11 – 12/17 0 0 0' in text(page, '#weekList')
     page.locator('[data-week="2026R2-W1"]').click()
     assert '工銀 50 10 — 60 0 0' in text(page, '#sheetBody')
+    page.locator('[data-past="2026R2-W1|昌哥|MPay"]').click()  # still possible after the campaign
+    page.locator('#sheetBody input').nth(0).uncheck(force=True)
+    page.locator('#sheetOk').click()
+    assert page.evaluate("window.__db.root.campaigns['2026R2'].weeks['2026R2-W1'].coupons.u1.used") is False and '昌哥 抽中 給商家 自付 MPay 50 — — 50 0 0' in text(page, '#sheetBody')
     page.keyboard.press('Escape')
     assert not page.errors, page.errors
     page.close()
@@ -314,10 +347,18 @@ with sync_playwright() as p:
         page = open_page(browser, SAT, width)
         page.locator('#price').fill('700')
         assert fits(page), width
+        assert not spills(page), (width, spills(page))
+        page.locator('#price').fill('')
+        # A family's real totals run to five digits with cents: they must still fit side by side.
+        page.evaluate("firebase.database().ref('campaigns/2026R2/weeks/2026R2-W1/coupons/u1').update({ redemption: { transactionId: 't1', actualSpendCents: 1561240, actualPaidCents: 1071050 } })")
+        page.locator('#usedBox summary').click()
+        assert '昌哥 給商家 自付 MPay 50 15,612 10,711' in text(page, '#usedList') and not spills(page), (width, spills(page))
         page.locator('.tabs [data-tab="register"]').click()
         page.locator('#weeksBox summary').click()
+        assert '全期 260 15,612 10,711' in text(page, '#weekList') and not spills(page), (width, spills(page))
         page.locator('[data-week="2026R2-W1"]').click()
-        assert fits(page), width
+        assert '昌哥 抽中 給商家 自付 MPay 50 — — 50 15,612 10,711' in text(page, '#sheetBody')
+        assert fits(page) and not spills(page), (width, spills(page))
         page.close()
     print('10 320px and 1280px PASS')
     browser.close()

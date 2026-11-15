@@ -145,6 +145,14 @@ test('payments: used coupons grouped per payment, with saved or estimated amount
   ]);
 });
 
+test('estimate: the smallest payment that uses a set of coupons', () => {
+  assert.deepEqual(Core.estimate([50, 10], false), { off: 60, spend: 180, pay: 120 });
+  assert.deepEqual(Core.estimate([20], true), { off: 32, spend: 100, pay: 68 });
+  assert.deepEqual(Core.estimate([50], true), { off: 62, spend: 162, pay: 100 });
+  assert.deepEqual(Core.estimate([], true), { off: 12, spend: 100, pay: 88 });
+  assert.deepEqual(Core.estimate([], false), { off: 0, spend: 0, pay: 0 });
+});
+
 test('tally counts e-vouchers drawn and used, and what was paid', () => {
   assert.deepEqual(Core.tally(rows(family)), { won: 410, used: 200, spend: 600, pay: 400 });
   assert.deepEqual(Core.tally([]), { won: 0, used: 0, spend: 0, pay: 0 });

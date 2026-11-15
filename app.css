@@ -11,6 +11,9 @@
   --green: #B9DAA5;
   --edge: 3px solid var(--ink);
   --round: 22px;
+  /* Number columns, in rem so that rows with bigger or smaller type still line up. */
+  --two: minmax(0, 1fr) 4.7rem 4.7rem;
+  --three: minmax(0, 1fr) 3.7rem 4.5rem 4.5rem;
   color-scheme: light;
 }
 
@@ -51,14 +54,25 @@ button { cursor: pointer; }
 
 /* One list style everywhere: label on the left, numbers on the right. */
 #useList, #regList { margin-top: 18px; }
-.cols, .row { display: grid; grid-template-columns: minmax(0, 1fr) 4.2em 4.2em; align-items: center; gap: 8px; }
+.cols, .row { display: grid; grid-template-columns: var(--two); align-items: center; gap: 8px; }
+.row > span + span { white-space: nowrap; }
 .cols { padding: 0 17px; color: var(--muted); font-size: 15px; }
 .cols span + span, .row > span + span { text-align: right; }
 .row { width: 100%; min-height: 60px; padding: 8px 0; border: 0; border-top: 2px dashed var(--line); background: none; text-align: left; }
 .row.two { grid-template-columns: minmax(0, 1fr) auto; }
 /* Past weeks have three numbers per row: drawn, paid to shops, paid out of pocket. */
-.three .cols, .three .row, .three .person h3 { grid-template-columns: minmax(0, 1fr) 3.3em 3.3em 3.3em; gap: 6px; }
-.three .row.total { font-size: 19px; }
+.three .cols, .three .row, .three .person h3 { grid-template-columns: var(--three); gap: 6px; }
+.three .row > span + span { font-size: 17px; } /* room for 15,612 */
+.three .row.total { font-size: 18px; }
+/* In a past week's card the wallet and its coupons get a line of their own, with the three numbers under it. */
+.three .person .row:not(.sub) { row-gap: 2px; }
+.three .person .row:not(.sub) > span:first-child { grid-column: 1 / -1; }
+.three .person .row:not(.sub) > span:nth-child(2) { grid-column: 2; }
+.three .person .row:not(.sub) .tags { display: inline-flex; margin: 0 0 0 10px; vertical-align: middle; }
+@media (max-width: 350px) { /* the narrowest phones */
+  :root { --three: minmax(0, 1fr) 3rem 3.8rem 3.8rem; }
+  .three .row > span + span, .three .row.total { font-size: 15px; }
+}
 .row small { display: block; color: var(--muted); font-size: 15px; }
 /* The family total: one green block. */
 .row.total { margin-top: 6px; padding: 8px 14px; border: var(--edge); border-radius: var(--round); background: var(--green); font-weight: 700; font-size: 21px; }
@@ -68,7 +82,7 @@ button { cursor: pointer; }
 
 /* One card per family member, each with their own colour. Coupons are tags; money is plain numbers. */
 .person { margin-top: 12px; padding: 0 14px 2px; border: var(--edge); border-radius: var(--round); background: var(--card); overflow: hidden; }
-.person h3 { display: grid; grid-template-columns: minmax(0, 1fr) 4.2em 4.2em; align-items: center; gap: 8px; margin: 0 -14px; padding: 8px 14px; border-bottom: var(--edge); background: var(--tint, var(--blue)); font-size: 21px; }
+.person h3 { display: grid; grid-template-columns: var(--two); align-items: center; gap: 8px; margin: 0 -14px; padding: 8px 14px; border-bottom: var(--edge); background: var(--tint, var(--blue)); font-size: 21px; }
 .person h3 span + span { font-size: 15px; font-weight: 400; text-align: right; } /* the column names, repeated on every card */
 .person h3 + .row { border-top: 0; }
 [data-m="0"] { --tint: var(--blue); }
