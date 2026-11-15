@@ -1,6 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Core = require('../core.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+// Phones keep app.css, core.js and app.js until their address changes, so index.html asks for them by content version.
+test('index.html asks for the current version of the files it loads', () => {
+  const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8').replace(/\r/g, '');
+  const files = ['app.css', 'core.js', 'app.js'];
+  const version = crypto.createHash('sha256').update(files.map(read).join('\n')).digest('hex').slice(0, 8);
+  const html = read('index.html');
+  for (const name of files) assert.ok(html.includes(`"./${name}?v=${version}"`), `in index.html, load ${name} as ./${name}?v=${version}`);
+});
 
 const coupon = (member, payment, amount, used = false, type = 'gov') => ({ member, payment, type, amount, used });
 const family = {

@@ -17,10 +17,11 @@
 ## 做事方式
 - 規則和計算只放在 `core.js`（純函式），畫面和 Firebase 放在 `app.js`。沒有建置步驟，不加框架。
 - 不要改 Firebase 路徑和紀錄格式；正式資料庫有家人的真實資料，測試一律用 `tests/mock-firebase.js`。
+- 改了 `app.css`、`core.js` 或 `app.js`，要更新 `index.html` 裡三個 `?v=` 版本號，家人的手機才會拿到新檔案；`core.test.js` 會檢查，忘了會失敗並告訴你該填的值。
 - 每次改動都要跑：`node --test tests/core.test.js` 和 `python3 tests/flows.py`。新流程要在 `flows.py` 加上提交、返回、復原的檢查。
 - 在分支上開發並開 PR 到 `main`；不要直接推到發佈中的分支。
 
 ## 已確認
 - 店家可以分開多個錢包付款，所以試算會把一筆消費分給多個錢包。
-- GitHub Pages 由 `main` 發佈；合併到 `main` 就會上線。
+- GitHub Pages 自 2026-11-15 起由分支 `claude/clever-lamport-1x0ztb` 發佈（原本是 `main`）；推到這個分支就會上線，家人馬上看到。
 - Firebase 沒有發布存取規則，網站不需要輸入任何碼。「家庭數字碼」（每部手機輸入一次數字）已寫好但未上線，在分支 `claude/family-code`。

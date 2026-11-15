@@ -51,9 +51,10 @@ class Preview(http.server.SimpleHTTPRequestHandler):
         html = (ROOT / 'index.html').read_text(encoding='utf-8')
         # Swap the real Firebase SDK for the in-page stand-in.
         html, swapped = re.subn(r'\s*<script src="https://www\.gstatic\.com/firebasejs/[^"]+"></script>', '', html)
-        if not swapped or '<script src="./core.js">' not in html:
-            return self.send_error(500, 'preview.py could not find the Firebase script tags in index.html')
-        body = html.replace('<script src="./core.js">', INJECT + '\n  <script src="./core.js">', 1).encode('utf-8')
+        html, placed = re.subn(r'(<script src="\./core\.js[^"]*">)', lambda tag: INJECT + '\n  ' + tag.group(1), html, count=1)
+        if not swapped or not placed:
+            return self.send_error(500, 'preview.py could not find the Firebase and core.js script tags in index.html')
+        body = html.encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))

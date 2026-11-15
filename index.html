@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Huninn&display=swap">
-  <link rel="stylesheet" href="./app.css">
+  <link rel="stylesheet" href="./app.css?v=def9b4a6">
 </head>
 <body>
   <main>
@@ -44,7 +44,7 @@
       <div id="regList"></div>
       <details id="weeksBox" hidden>
         <summary>各週抽中的券</summary>
-        <div id="weekList"></div>
+        <div id="weekList" class="three"></div>
         <button id="export" class="plain" type="button">匯出備份</button>
       </details>
       <details id="walletBox">
@@ -62,7 +62,7 @@
   <dialog id="sheet" aria-labelledby="sheetTitle">
     <form id="sheetForm" method="dialog">
       <h2 id="sheetTitle"></h2>
-      <div id="sheetBody"></div>
+      <div id="sheetBody" class="three"></div>
       <button id="sheetOk" class="primary" type="submit"></button>
       <button id="sheetCancel" class="plain" type="button">取消</button>
     </form>
@@ -72,7 +72,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <script src="./core.js"></script>
-  <script src="./app.js"></script>
+  <script src="./core.js?v=def9b4a6"></script>
+  <script src="./app.js?v=def9b4a6"></script>
 </body>
 </html>

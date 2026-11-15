@@ -77,14 +77,17 @@
   const draws = (member, payment) => records(state.coupons).filter(c => c.member === member && c.payment === payment);
 
   // Every list is the same table: a label, then two numbers.
-  const head = (first, second) => `<div class="cols" aria-hidden="true"><span></span><span>${first}</span><span>${second}</span></div>`;
-  const cells = (first, second) => `<span>${num(first)}</span><span>${num(second)}</span>`;
+  const head = (...labels) => `<div class="cols" aria-hidden="true"><span></span>${labels.map(label => `<span>${label}</span>`).join('')}</div>`;
+  const cells = (...values) => `<span>${values.map(num).join('</span><span>')}</span>`;
+  const MONEY = ['給商家', '自付']; // what the shop is paid, and what comes out of pocket after the coupons
+  const HISTORY = ['抽中', ...MONEY]; // past weeks also show the e-voucher value drawn
   const readout = lines => `<dl class="readout">${lines.map(([label, value, big]) => `<div${big ? ' class="big"' : ''}><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
-  // One card per family member (`data-m` picks the member's colour): the name, the member's rows, and a subtotal line when there are several rows.
-  const byMember = (items, row, subtotal) => MEMBERS.map(member => {
+  // One card per family member (`data-m` picks the member's colour): the name with the column names beside it,
+  // so the numbers stay labelled however far the page is scrolled; then the member's rows, and a subtotal line when there are several.
+  const byMember = (items, row, subtotal, labels = []) => MEMBERS.map(member => {
     const mine = items.filter(item => item.member === member);
     if (!mine.length) return '';
-    return `<section class="person" data-m="${MEMBERS.indexOf(member)}"><h3>${esc(member)}</h3>${mine.map(row).join('')}${subtotal && mine.length > 1 ? `<div class="row sub"><span>小計</span>${subtotal(mine)}</div>` : ''}</section>`;
+    return `<section class="person" data-m="${MEMBERS.indexOf(member)}"><h3><span>${esc(member)}</span>${labels.map(label => `<span>${label}</span>`).join('')}</h3>${mine.map(row).join('')}${subtotal && mine.length > 1 ? `<div class="row sub"><span>小計</span>${subtotal(mine)}</div>` : ''}</section>`;
   }).join('');
   // Coupons as tags, so they never look like the amounts beside them. Each is [text, extra class].
   const tags = list => `<span class="tags">${list.map(([text, kind = '']) => `<b class="${kind}">${text}</b>`).join('')}</span>`;
@@ -211,7 +214,7 @@
     const result = price ? currentPlan() : null;
     $('verdict').hidden = !result;
     $('markPlan').hidden = !result?.payments.length;
-    const columns = head('給商家', '自付');
+    const columns = head(...MONEY);
     const subtotal = mine => cells(sum(mine, item => item.spend), sum(mine, item => item.pay));
 
     if (result) {
@@ -223,7 +226,7 @@
       $('verdict').classList.toggle('good', Boolean(result.off) && !left);
       $('useList').innerHTML = !result.payments.length ? '' : columns
         + `<div class="row total"><span>合計</span>${cells(price, result.pay)}</div>`
-        + byMember(result.payments, p => `<div class="row"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</div>`, subtotal);
+        + byMember(result.payments, p => `<div class="row"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</div>`, subtotal, MONEY);
     } else if (!total) {
       const nothingYet = week && !Object.keys(state.coupons).length;
       $('useList').innerHTML = nothingYet ? '<a class="primary" href="#register">登記抽獎結果</a>' : '';
@@ -231,7 +234,7 @@
       const shown = list.filter(w => !state.skip.has(w.member));
       $('useList').innerHTML = !shown.length ? '' : columns
         + `<div class="row total"><span>${shown.length === list.length ? '全家' : '合計'}</span>${subtotal(shown)}</div>`
-        + byMember(shown, w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：券 ${w.coupons.map(c => c.face).join('、')}，給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}${faceTags(w.coupons.map(c => c.face))}</span>${cells(w.spend, w.pay)}</button>`, subtotal);
+        + byMember(shown, w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：券 ${w.coupons.map(c => c.face).join('、')}，給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}${faceTags(w.coupons.map(c => c.face))}</span>${cells(w.spend, w.pay)}</button>`, subtotal, MONEY);
     }
 
     // Used this week, one row per payment made: what the shop got and what was paid out of pocket.
@@ -240,7 +243,7 @@
     $('usedSummary').textContent = `已用電子券 ${mop(sum(used, p => p.face))}`;
     $('usedList').innerHTML = columns
       + `<div class="row total"><span>全家</span>${subtotal(used)}</div>`
-      + byMember(used, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</button>`, subtotal);
+      + byMember(used, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</button>`, subtotal, MONEY);
   }
 
   // The best way to pay the price typed in, using only the ticked family members' coupons.
@@ -303,11 +306,11 @@
     // Every week so far: e-voucher value drawn and used.
     const weeks = Core.weeks(Core.macauDate());
     const tallies = weeks.map(week => Core.tally(records(state.weeks[week.key])));
-    const weekRow = (key, label, won, used, total) => `<button class="row${total ? ' total' : ''}" type="button" data-week="${key}" aria-label="${label.replace(/<.*/, '')}：抽中 ${mop(won)}，已用 ${mop(used)}"><span>${label}</span>${cells(won, used)}</button>`;
+    const weekRow = (key, label, won, spend, pay, total) => `<button class="row${total ? ' total' : ''}" type="button" data-week="${key}" aria-label="${label.replace(/<.*/, '')}：抽中 ${mop(won)}，給商家 ${mop(spend)}，自付 ${mop(pay)}"><span>${label}</span>${cells(won, spend, pay)}</button>`;
     $('weeksBox').hidden = !weeks.length;
-    $('weekList').innerHTML = head('抽中', '已用')
-      + weekRow('all', '全期', sum(tallies, t => t.won), sum(tallies, t => t.used), true)
-      + weeks.map((week, index) => weekRow(week.key, `${weekName(week)}<small>${weekDates(week)}</small>`, tallies[index].won, tallies[index].used)).join('');
+    $('weekList').innerHTML = head(...HISTORY)
+      + weekRow('all', '全期', sum(tallies, t => t.won), sum(tallies, t => t.spend), sum(tallies, t => t.pay), true)
+      + weeks.map((week, index) => weekRow(week.key, `${weekName(week)}<small>${weekDates(week)}</small>`, tallies[index].won, tallies[index].spend, tallies[index].pay)).join('');
 
     $('walletSettings').innerHTML = MEMBERS.map(member => `<fieldset class="chips"><legend>${esc(member)}</legend>${WALLETS.map(wallet =>
       `<label><input type="checkbox" data-wallet="${esc(member)}|${esc(wallet)}"${state.wallets[member][wallet] ? ' checked' : ''}><span>${esc(wallet)}</span></label>`).join('')}</fieldset>`).join('');
@@ -322,19 +325,20 @@
     const week = weeks.find(w => w.key === key);
     const sets = (week ? [week] : weeks).map(w => records(state.weeks[w.key]));
     const all = sets.flat();
-    const total = field => sum(sets, set => Core.tally(set)[field]); // week by week: a payment belongs to one week
+    // Totals of the rows that pass `keep`, added up week by week because a payment belongs to one week.
+    const total = (field, keep = () => true) => sum(sets, set => Core.tally(set.filter(keep))[field]);
+    const figures = keep => cells(total('won', keep), total('spend', keep), total('pay', keep));
     const luck = Core.luck(all);
     const top = entry => `${esc(entry.name)} · ${mop(entry.won)}`;
     const wallets = MEMBERS.flatMap(member => WALLETS.map(payment => ({ member, payment, draws: all.filter(c => c.member === member && c.payment === payment) }))).filter(w => w.draws.length);
-    const tally = list => { const t = Core.tally(list); return cells(t.won, t.used); };
     openSheet({
       title: week ? `${weekName(week)} · ${weekDates(week)}` : '全期',
       body: !all.length ? '<p class="note">沒有登記</p>' : readout([
         ['抽中', mop(total('won'))], ['已用', mop(total('used'))], ['給商家', mop(total('spend'))], ['自付', mop(total('pay'))],
         ...(luck.member ? [['手氣王', top(luck.member)]] : []), ...(luck.wallet ? [['最旺錢包', top(luck.wallet)]] : []),
         ...(luck.merchant ? [['商戶券', `${luck.merchant} 張`]] : []), ...(luck.gift ? [['禮遇券', `${luck.gift} 張`]] : [])
-      ]) + head('抽中', '已用')
-        + byMember(wallets, w => `<div class="row"><span>${esc(w.payment)}${week ? drawTags(w.draws) : ''}</span>${tally(w.draws)}</div>`, mine => tally(mine.flatMap(w => w.draws))),
+      ]) + byMember(wallets, w => `<div class="row"><span>${esc(w.payment)}${week ? drawTags(w.draws) : ''}</span>${figures(c => c.member === w.member && c.payment === w.payment)}</div>`,
+        mine => figures(c => c.member === mine[0].member), HISTORY),
       ok: ''
     });
   }
