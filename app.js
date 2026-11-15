@@ -37,10 +37,11 @@
     online: false,
     price: null, // the purchase being planned, or null
     merchantOk: false, // the shop being planned for accepts merchant coupons
-    skip: new Set() // family members left out of the plan
+    skip: new Set() // family members whose coupons are hidden and left out of the plan; remembered on this phone
   };
   let db = null;
   let sheetAction = null;
+  let sheetChange = null; // called when something in the open sheet is ticked or unticked
   let toastTimer = null;
 
   // ---------- data ----------
@@ -79,15 +80,20 @@
   const head = (first, second) => `<div class="cols" aria-hidden="true"><span></span><span>${first}</span><span>${second}</span></div>`;
   const cells = (first, second) => `<span>${num(first)}</span><span>${num(second)}</span>`;
   const readout = lines => `<dl class="readout">${lines.map(([label, value, big]) => `<div${big ? ' class="big"' : ''}><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
-  // Rows grouped under each family member's name, with a subtotal beside the name when the member has several rows.
-  const byMember = (items, subtotal, row) => MEMBERS.map(member => {
+  // One card per family member: the name, the member's rows, and a subtotal line when there are several rows.
+  const byMember = (items, row, subtotal) => MEMBERS.map(member => {
     const mine = items.filter(item => item.member === member);
     if (!mine.length) return '';
-    return `<div class="row member"><span>${esc(member)}</span>${mine.length > 1 ? subtotal(mine) : ''}</div>${mine.map(row).join('')}`;
+    return `<section class="person"><h3>${esc(member)}</h3>${mine.map(row).join('')}${subtotal && mine.length > 1 ? `<div class="row sub"><span>小計</span>${subtotal(mine)}</div>` : ''}</section>`;
   }).join('');
+  // Coupons as tags, so they never look like the amounts beside them. Each is [text, extra class].
+  const tags = list => `<span class="tags">${list.map(([text, kind = '']) => `<b class="${kind}">${text}</b>`).join('')}</span>`;
+  const faceTags = (faces, merchant) => tags([...faces.map(face => [face]), ...(merchant ? [['商戶', 'other']] : [])]);
+  const drawTags = list => tags(list.map(c => [({ gov: c.amount, merchant: '商戶', gift: '禮遇' })[c.type] || '—',
+    `${c.type === 'gov' ? '' : c.type === 'zero' ? 'none' : 'other'}${c.used ? ' used' : ''}`]));
 
   function saveCache() {
-    try { localStorage.setItem(CACHE, JSON.stringify({ weeks: state.weeks, wallets: state.wallets })); } catch { /* storage full or blocked */ }
+    try { localStorage.setItem(CACHE, JSON.stringify({ weeks: state.weeks, wallets: state.wallets, skip: [...state.skip] })); } catch { /* storage full or blocked */ }
   }
 
   // `byWeek` is week key → stored coupon map.
@@ -101,6 +107,7 @@
       const cached = JSON.parse(localStorage.getItem(CACHE) || '{}');
       state.wallets = cleanWallets(cached.wallets);
       setWeeks(cached.weeks);
+      state.skip = new Set((cached.skip || []).filter(member => MEMBERS.includes(member)));
     } catch { /* ignore a broken cache */ }
   }
 
@@ -197,8 +204,8 @@
     const hasMerchant = withMerchant.some(w => w.merchantId);
     const price = total || hasMerchant ? state.price : null;
     $('merchantBox').hidden = !price || !hasMerchant;
-    const owners = MEMBERS.filter(member => (state.merchantOk ? withMerchant : list).some(w => w.member === member));
-    $('who').hidden = !price || owners.length < 2;
+    const owners = MEMBERS.filter(member => (price && state.merchantOk ? withMerchant : list).some(w => w.member === member));
+    $('who').hidden = owners.length < 2;
     $('who').innerHTML = owners.map(member =>
       `<label><input type="checkbox" data-member="${esc(member)}"${state.skip.has(member) ? '' : ' checked'}><span>${esc(member)}</span></label>`).join('');
     const result = price ? currentPlan() : null;
@@ -216,14 +223,15 @@
       $('verdict').classList.toggle('good', Boolean(result.off) && !left);
       $('useList').innerHTML = !result.payments.length ? '' : columns
         + `<div class="row total"><span>合計</span>${cells(price, result.pay)}</div>`
-        + byMember(result.payments, subtotal, p => `<div class="row"><span>${esc(p.payment)}<small>${[p.face ? `券 ${num(p.face)}` : '', p.merchant ? `商戶券 ${Core.MERCHANT.off}` : ''].filter(Boolean).join(' + ')}</small></span>${cells(p.spend, p.pay)}</div>`);
+        + byMember(result.payments, p => `<div class="row"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</div>`, subtotal);
     } else if (!total) {
       const nothingYet = week && !Object.keys(state.coupons).length;
       $('useList').innerHTML = nothingYet ? '<a class="primary" href="#register">登記抽獎結果</a>' : '';
     } else {
-      $('useList').innerHTML = columns
-        + `<div class="row total"><span>全家</span>${subtotal(list)}</div>`
-        + byMember(list, subtotal, w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}<small>券 ${w.coupons.map(c => c.face).join(' + ')}</small></span>${cells(w.spend, w.pay)}</button>`);
+      const shown = list.filter(w => !state.skip.has(w.member));
+      $('useList').innerHTML = !shown.length ? '' : columns
+        + `<div class="row total"><span>${shown.length === list.length ? '全家' : '合計'}</span>${subtotal(shown)}</div>`
+        + byMember(shown, w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：券 ${w.coupons.map(c => c.face).join('、')}，給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}${faceTags(w.coupons.map(c => c.face))}</span>${cells(w.spend, w.pay)}</button>`, subtotal);
     }
 
     // Used this week, one row per payment made: what the shop got and what was paid out of pocket.
@@ -232,10 +240,8 @@
     $('usedSummary').textContent = `已用電子券 ${mop(sum(used, p => p.face))}`;
     $('usedList').innerHTML = columns
       + `<div class="row total"><span>全家</span>${subtotal(used)}</div>`
-      + byMember(used, subtotal, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}<small>${usedText(p)}</small></span>${cells(p.spend, p.pay)}</button>`);
+      + byMember(used, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</button>`, subtotal);
   }
-
-  const usedText = p => [p.face ? `券 ${num(p.face)}` : '', p.merchant ? '商戶券' : ''].filter(Boolean).join(' + ');
 
   // The best way to pay the price typed in, using only the ticked family members' coupons.
   function currentPlan() {
@@ -255,14 +261,29 @@
     });
   }
 
+  // Pay with one wallet. With several coupons, tick the ones used this time; all are ticked to start with.
   function openUseSheet(member, payment) {
     const wallet = Core.wallets(state.coupons).find(w => w.member === member && w.payment === payment);
     if (!wallet) return;
+    const boxes = () => [...$('sheetBody').querySelectorAll('input')];
+    const picked = () => {
+      const coupons = boxes().length ? wallet.coupons.filter((_, index) => boxes()[index].checked) : wallet.coupons;
+      const face = sum(coupons, c => c.face);
+      return { member, payment, off: face, spend: face * Core.MULTIPLE, pay: face * (Core.MULTIPLE - 1), ids: coupons.map(c => c.id) };
+    };
+    const figures = p => readout([['給商家', mop(p.spend)], ['券減', mop(p.off)], ['自付', mop(p.pay), true]]);
     openSheet({
       title: `${member} · ${payment}`,
-      body: readout([['給商家', mop(wallet.spend)], ['券減', mop(wallet.face)], ['自付', mop(wallet.pay), true]]),
+      body: (wallet.coupons.length < 2 ? '' : `<fieldset class="chips" aria-label="這次用哪幾張券">${wallet.coupons.map(c =>
+        `<label><input type="checkbox" checked><span>${c.face}</span></label>`).join('')}</fieldset>`)
+        + `<div id="figures">${figures({ ...wallet, off: wallet.face })}</div>`,
       ok: '已付款，記為已用',
-      action: () => markUsed([{ ...wallet, off: wallet.face, ids: wallet.coupons.map(c => c.id) }])
+      change: () => {
+        const now = picked();
+        boxes()[0].setCustomValidity(now.ids.length ? '' : 'pick one'); // nothing ticked: nothing to save
+        $('figures').innerHTML = figures(now);
+      },
+      action: () => markUsed([picked()])
     });
   }
 
@@ -276,12 +297,8 @@
     const drawing = Boolean(state.week) && state.week.daysLeft >= 4;
     $('badge').hidden = !drawing || !pending;
     $('badge').textContent = pending;
-    $('regList').innerHTML = !state.week ? '' : MEMBERS.map(member => {
-      const mine = all.filter(w => w.member === member);
-      if (!mine.length) return '';
-      return `<div class="row member two"><span>${esc(member)}</span></div>` + mine.map(w =>
-        `<button class="row two" type="button" data-reg="${esc(member)}|${esc(w.payment)}"><span>${esc(w.payment)}</span>${w.draws.length ? `<span>${drawText(w.draws)}</span>` : '<span class="todo">未登記</span>'}</button>`).join('');
-    }).join('');
+    $('regList').innerHTML = !state.week ? '' : byMember(all, w =>
+      `<button class="row two" type="button" data-reg="${esc(w.member)}|${esc(w.payment)}"><span>${esc(w.payment)}</span>${w.draws.length ? drawTags(w.draws) : '<span class="todo">未登記</span>'}</button>`);
 
     // Every week so far: e-voucher value drawn and used.
     const weeks = Core.weeks(Core.macauDate());
@@ -296,7 +313,6 @@
       `<label><input type="checkbox" data-wallet="${esc(member)}|${esc(wallet)}"${state.wallets[member][wallet] ? ' checked' : ''}><span>${esc(wallet)}</span></label>`).join('')}</fieldset>`).join('');
   }
 
-  const drawText = list => list.map(c => ({ gov: c.amount, merchant: '商戶', gift: '禮遇' })[c.type] || '—').join(' · ');
   const weekName = week => (week.key === state.week?.key ? '本週' : `第 ${week.number} 週`);
   const weekDates = week => [week.start, week.end].map(day => `${Number(day.slice(5, 7))}/${Number(day.slice(8))}`).join(' – ');
 
@@ -318,7 +334,7 @@
         ...(luck.member ? [['手氣王', top(luck.member)]] : []), ...(luck.wallet ? [['最旺錢包', top(luck.wallet)]] : []),
         ...(luck.merchant ? [['商戶券', `${luck.merchant} 張`]] : []), ...(luck.gift ? [['禮遇券', `${luck.gift} 張`]] : [])
       ]) + head('抽中', '已用')
-        + byMember(wallets, mine => tally(mine.flatMap(w => w.draws)), w => `<div class="row"><span>${esc(w.payment)}${week ? `<small>${drawText(w.draws)}</small>` : ''}</span>${tally(w.draws)}</div>`),
+        + byMember(wallets, w => `<div class="row"><span>${esc(w.payment)}${week ? drawTags(w.draws) : ''}</span>${tally(w.draws)}</div>`, mine => tally(mine.flatMap(w => w.draws))),
       ok: ''
     });
   }
@@ -355,13 +371,14 @@
 
   // ---------- sheet, toast, navigation ----------
 
-  function openSheet({ title, body, ok, action }) {
+  function openSheet({ title, body, ok, action, change }) {
     $('sheetTitle').textContent = title;
     $('sheetBody').innerHTML = body;
     $('sheetOk').textContent = ok;
     $('sheetOk').hidden = !ok;
     $('sheetCancel').textContent = ok ? '取消' : '關閉';
     sheetAction = action;
+    sheetChange = change;
     updateSheetOk();
     $('sheet').showModal();
     $('sheet').scrollTop = 0; // a long sheet opens at its top, not at the focused button
@@ -401,6 +418,7 @@
   $('who').addEventListener('change', event => {
     const member = event.target.dataset.member;
     if (event.target.checked) state.skip.delete(member); else state.skip.add(member);
+    saveCache();
     renderUse();
   });
   $('clearPrice').addEventListener('click', () => {
@@ -440,7 +458,7 @@
     db.ref(`${ROOT}/settings/wallets/${member}/${wallet}`).set(event.target.checked).catch(() => toast('儲存失敗，請再試一次'));
   });
 
-  $('sheetForm').addEventListener('change', updateSheetOk);
+  $('sheetForm').addEventListener('change', () => { if (sheetChange) sheetChange(); updateSheetOk(); });
   $('sheetForm').addEventListener('submit', event => {
     event.preventDefault();
     const action = sheetAction;

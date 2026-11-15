@@ -49,8 +49,8 @@
     for (const c of records) {
       if (!c.used || !['gov', 'merchant'].includes(c.type)) continue;
       const key = `${c.member}|${c.payment}|${c.redemption?.transactionId || c.usedAt || c.id}`;
-      const group = groups.get(key) || { member: c.member, payment: c.payment, face: 0, merchant: false, ids: [], saved: null };
-      if (c.type === 'gov') group.face += c.amount; else group.merchant = true;
+      const group = groups.get(key) || { member: c.member, payment: c.payment, face: 0, faces: [], merchant: false, ids: [], saved: null };
+      if (c.type === 'gov') { group.face += c.amount; group.faces.push(c.amount); } else group.merchant = true;
       group.ids.push(c.id);
       if (Number.isFinite(c.redemption?.actualSpendCents) && Number.isFinite(c.redemption?.actualPaidCents)) group.saved = c.redemption;
       groups.set(key, group);
@@ -167,7 +167,7 @@
     return {
       payments: picks.map(pick => ({
         member: pick.wallet.member, payment: pick.wallet.payment, merchant: pick.merchant,
-        spend: pick.spend, face: pick.face, off: pick.off, pay: round(pick.spend - pick.off),
+        spend: pick.spend, face: pick.face, faces: pick.coupons.map(c => c.face), off: pick.off, pay: round(pick.spend - pick.off),
         ids: [...pick.coupons.map(c => c.id), ...(pick.merchant ? [pick.wallet.merchantId] : [])]
       })),
       face, // e-voucher value used
