@@ -31,14 +31,15 @@
 
   const state = {
     week: Core.week(Core.macauDate()), // null outside the campaign
+    weeks: {}, // every week's records, week key → id → row
     coupons: {}, // this week's records, id → row
     wallets: defaultWallets(), // member → wallet → enabled
     online: false,
     price: null, // the purchase being planned, or null
-    merchantOk: false // the shop being planned for accepts merchant coupons
+    merchantOk: false, // the shop being planned for accepts merchant coupons
+    skip: new Set() // family members left out of the plan
   };
   let db = null;
-  let couponsRef = null;
   let sheetAction = null;
   let toastTimer = null;
 
@@ -68,20 +69,38 @@
   }
 
   const activeWallets = member => WALLETS.filter(wallet => state.wallets[member][wallet]);
-  const draws = (member, payment) => Object.entries(state.coupons)
-    .filter(([, c]) => c.member === member && c.payment === payment)
+  // A week's stored map as a list, oldest draw first, each row carrying its id.
+  const records = coupons => Object.entries(coupons || {})
     .sort(([a, x], [b, y]) => (x.createdAt || 0) - (y.createdAt || 0) || a.localeCompare(b))
     .map(([id, c]) => ({ id, ...c }));
+  const draws = (member, payment) => records(state.coupons).filter(c => c.member === member && c.payment === payment);
+
+  // Every list is the same table: a label, then two numbers.
+  const head = (first, second) => `<div class="cols" aria-hidden="true"><span></span><span>${first}</span><span>${second}</span></div>`;
+  const cells = (first, second) => `<span>${num(first)}</span><span>${num(second)}</span>`;
+  const readout = lines => `<dl class="readout">${lines.map(([label, value, big]) => `<div${big ? ' class="big"' : ''}><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
+  // Rows grouped under each family member's name, with a subtotal beside the name when the member has several rows.
+  const byMember = (items, subtotal, row) => MEMBERS.map(member => {
+    const mine = items.filter(item => item.member === member);
+    if (!mine.length) return '';
+    return `<div class="row member"><span>${esc(member)}</span>${mine.length > 1 ? subtotal(mine) : ''}</div>${mine.map(row).join('')}`;
+  }).join('');
 
   function saveCache() {
-    try { localStorage.setItem(CACHE, JSON.stringify({ week: state.week?.key, coupons: state.coupons, wallets: state.wallets })); } catch { /* storage full or blocked */ }
+    try { localStorage.setItem(CACHE, JSON.stringify({ weeks: state.weeks, wallets: state.wallets })); } catch { /* storage full or blocked */ }
+  }
+
+  // `byWeek` is week key → stored coupon map.
+  function setWeeks(byWeek) {
+    state.weeks = Object.fromEntries(Object.entries(byWeek || {}).map(([key, coupons]) => [key, cleanCoupons(coupons)]));
+    state.coupons = (state.week && state.weeks[state.week.key]) || {};
   }
 
   function loadCache() {
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE) || '{}');
       state.wallets = cleanWallets(cached.wallets);
-      if (state.week && cached.week === state.week.key) state.coupons = cleanCoupons(cached.coupons);
+      setWeeks(cached.weeks);
     } catch { /* ignore a broken cache */ }
   }
 
@@ -91,15 +110,11 @@
     db = firebase.database();
     db.ref('.info/connected').on('value', snapshot => { state.online = snapshot.val() === true; render(); });
     db.ref(`${ROOT}/settings/wallets`).on('value', snapshot => { state.wallets = cleanWallets(snapshot.val()); saveCache(); render(); });
-    listen();
-  }
-
-  function listen() {
-    if (couponsRef) couponsRef.off();
-    couponsRef = null;
-    if (!db || !state.week) return;
-    couponsRef = db.ref(`${ROOT}/weeks/${state.week.key}/coupons`);
-    couponsRef.on('value', snapshot => { state.coupons = cleanCoupons(snapshot.val()); saveCache(); render(); });
+    db.ref(`${ROOT}/weeks`).on('value', snapshot => {
+      setWeeks(Object.fromEntries(Object.entries(snapshot.val() || {}).map(([key, week]) => [key, week?.coupons])));
+      saveCache();
+      render();
+    });
   }
 
   // A new day can end the week (Friday) or change how soon the vouchers expire.
@@ -108,7 +123,7 @@
     if (next?.key === state.week?.key && next?.daysLeft === state.week?.daysLeft) return;
     const changed = next?.key !== state.week?.key;
     state.week = next;
-    if (changed) { state.coupons = {}; state.price = null; $('price').value = ''; listen(); }
+    if (changed) { state.coupons = (next && state.weeks[next.key]) || {}; state.price = null; $('price').value = ''; }
     render();
   }
 
@@ -182,52 +197,62 @@
     const hasMerchant = withMerchant.some(w => w.merchantId);
     const price = total || hasMerchant ? state.price : null;
     $('merchantBox').hidden = !price || !hasMerchant;
-    const result = price ? Core.plan(state.merchantOk ? withMerchant : list, price) : null;
+    const owners = MEMBERS.filter(member => (state.merchantOk ? withMerchant : list).some(w => w.member === member));
+    $('who').hidden = !price || owners.length < 2;
+    $('who').innerHTML = owners.map(member =>
+      `<label><input type="checkbox" data-member="${esc(member)}"${state.skip.has(member) ? '' : ' checked'}><span>${esc(member)}</span></label>`).join('');
+    const result = price ? currentPlan() : null;
     $('verdict').hidden = !result;
     $('markPlan').hidden = !result?.payments.length;
-    const head = '<div class="cols" aria-hidden="true"><span></span><span>給商家</span><span>自付</span></div>';
-    const cells = (spend, pay) => `<span>${num(spend)}</span><span>${num(pay)}</span>`;
+    const columns = head('給商家', '自付');
+    const subtotal = mine => cells(sum(mine, item => item.spend), sum(mine, item => item.pay));
 
     if (result) {
-      $('verdict').innerHTML = !result.off ? `未滿 ${mop(result.least)}，用不到券`
-        : !result.left ? `券減 ${mop(result.off)}，電子券全部用完`
-          : `券減 ${mop(result.off)}，電子券還剩 ${mop(result.left)}<small>買滿 ${mop(result.full)} 才全部用完</small>`;
-      $('verdict').classList.toggle('good', Boolean(result.off) && !result.left);
-      $('useList').innerHTML = !result.payments.length ? '' : head
-        + result.payments.map(p => `<div class="row"><span>${esc(p.member)} · ${esc(p.payment)}<small>${[p.face ? `券 ${num(p.face)}` : '', p.merchant ? `商戶券 ${Core.MERCHANT.off}` : ''].filter(Boolean).join(' + ')}</small></span>${cells(p.spend, p.pay)}</div>`).join('')
-        + `<div class="row total"><span>合計</span>${cells(price, result.pay)}</div>`;
+      const left = total - result.face; // of the whole family's e-vouchers
+      const hint = result.exact ? '剛剛好' : result.next ? `再買 ${mop(result.next.more)}，多減 ${mop(result.next.gain)}` : '';
+      $('verdict').innerHTML = !result.least ? '沒有可用的券'
+        : !result.off ? `未滿 ${mop(result.least)}，用不到券`
+          : `券減 ${mop(result.off)}，電子券${left ? `還剩 ${mop(left)}` : '全部用完'}${hint ? `<small>${hint}</small>` : ''}`;
+      $('verdict').classList.toggle('good', Boolean(result.off) && !left);
+      $('useList').innerHTML = !result.payments.length ? '' : columns
+        + `<div class="row total"><span>合計</span>${cells(price, result.pay)}</div>`
+        + byMember(result.payments, subtotal, p => `<div class="row"><span>${esc(p.payment)}<small>${[p.face ? `券 ${num(p.face)}` : '', p.merchant ? `商戶券 ${Core.MERCHANT.off}` : ''].filter(Boolean).join(' + ')}</small></span>${cells(p.spend, p.pay)}</div>`);
     } else if (!total) {
       const nothingYet = week && !Object.keys(state.coupons).length;
       $('useList').innerHTML = nothingYet ? '<a class="primary" href="#register">登記抽獎結果</a>' : '';
     } else {
-      $('useList').innerHTML = head
-        + `<div class="row total"><span>全家</span>${cells(total * 3, total * 2)}</div>`
-        + MEMBERS.map(member => {
-          const mine = list.filter(w => w.member === member);
-          if (!mine.length) return '';
-          return `<div class="row member"><span>${esc(member)}</span>${mine.length > 1 ? cells(sum(mine, w => w.spend), sum(mine, w => w.pay)) : ''}</div>`
-            + mine.map(w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}<small>券 ${w.coupons.map(c => c.face).join(' + ')}</small></span>${cells(w.spend, w.pay)}</button>`).join('');
-        }).join('');
+      $('useList').innerHTML = columns
+        + `<div class="row total"><span>全家</span>${subtotal(list)}</div>`
+        + byMember(list, subtotal, w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}<small>券 ${w.coupons.map(c => c.face).join(' + ')}</small></span>${cells(w.spend, w.pay)}</button>`);
     }
 
-    const used = usedGroups();
+    // Used this week, one row per payment made: what the shop got and what was paid out of pocket.
+    const used = Core.payments(records(state.coupons));
     $('usedBox').hidden = !used.length;
-    $('usedSummary').textContent = `已用電子券 ${mop(sum(used, g => g.face))}`;
-    $('usedList').innerHTML = used.map(g => `<div class="row two"><span>${esc(g.member)} · ${esc(g.payment)}<small>${[g.face ? `券 ${num(g.face)}` : '', g.merchant ? '商戶券' : ''].filter(Boolean).join(' + ')}</small></span><button class="link" type="button" data-undo="${esc(g.ids.join(','))}">復原</button></div>`).join('');
+    $('usedSummary').textContent = `已用電子券 ${mop(sum(used, p => p.face))}`;
+    $('usedList').innerHTML = columns
+      + `<div class="row total"><span>全家</span>${subtotal(used)}</div>`
+      + byMember(used, subtotal, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}<small>${usedText(p)}</small></span>${cells(p.spend, p.pay)}</button>`);
   }
 
-  // Used e-vouchers, one entry per payment.
-  function usedGroups() {
-    const groups = new Map();
-    for (const [id, c] of Object.entries(state.coupons)) {
-      if (!c.used || !['gov', 'merchant'].includes(c.type)) continue;
-      const key = `${c.member}|${c.payment}|${c.redemption?.transactionId || c.usedAt || id}`;
-      const group = groups.get(key) || { member: c.member, payment: c.payment, face: 0, merchant: false, ids: [] };
-      if (c.type === 'gov') group.face += c.amount; else group.merchant = true;
-      group.ids.push(id);
-      groups.set(key, group);
-    }
-    return [...groups.values()];
+  const usedText = p => [p.face ? `券 ${num(p.face)}` : '', p.merchant ? '商戶券' : ''].filter(Boolean).join(' + ');
+
+  // The best way to pay the price typed in, using only the ticked family members' coupons.
+  function currentPlan() {
+    const list = Core.wallets(state.coupons, { merchant: state.merchantOk }).filter(w => !state.skip.has(w.member));
+    return Core.plan(list, state.price);
+  }
+
+  // A payment already made: what was paid, and the way to take it back.
+  function openUsedSheet(ids) {
+    const payment = Core.payments(records(state.coupons)).find(p => p.ids.join(',') === ids);
+    if (!payment) return;
+    openSheet({
+      title: `${payment.member} · ${payment.payment}`,
+      body: readout([['給商家', mop(payment.spend)], ['券減', mop(payment.off)], ['自付', mop(payment.pay), true]]),
+      ok: '復原為未用',
+      action: () => markUnused(payment.ids)
+    });
   }
 
   function openUseSheet(member, payment) {
@@ -235,7 +260,7 @@
     if (!wallet) return;
     openSheet({
       title: `${member} · ${payment}`,
-      body: `<dl class="readout"><div><dt>給商家</dt><dd>${mop(wallet.spend)}</dd></div><div><dt>券減</dt><dd>${mop(wallet.face)}</dd></div><div class="big"><dt>自付</dt><dd>${mop(wallet.pay)}</dd></div></dl>`,
+      body: readout([['給商家', mop(wallet.spend)], ['券減', mop(wallet.face)], ['自付', mop(wallet.pay), true]]),
       ok: '已付款，記為已用',
       action: () => markUsed([{ ...wallet, off: wallet.face, ids: wallet.coupons.map(c => c.id) }])
     });
@@ -254,13 +279,63 @@
     $('regList').innerHTML = !state.week ? '' : MEMBERS.map(member => {
       const mine = all.filter(w => w.member === member);
       if (!mine.length) return '';
-      return `<div class="row member two"><span>${esc(member)}</span></div>` + mine.map(w => {
-        const text = w.draws.map(c => ({ gov: c.amount, merchant: '商戶', gift: '禮遇' })[c.type] || '—').join(' · ');
-        return `<button class="row two" type="button" data-reg="${esc(member)}|${esc(w.payment)}"><span>${esc(w.payment)}</span>${w.draws.length ? `<span>${text}</span>` : '<span class="todo">未登記</span>'}</button>`;
-      }).join('');
+      return `<div class="row member two"><span>${esc(member)}</span></div>` + mine.map(w =>
+        `<button class="row two" type="button" data-reg="${esc(member)}|${esc(w.payment)}"><span>${esc(w.payment)}</span>${w.draws.length ? `<span>${drawText(w.draws)}</span>` : '<span class="todo">未登記</span>'}</button>`).join('');
     }).join('');
+
+    // Every week so far: e-voucher value drawn and used.
+    const weeks = Core.weeks(Core.macauDate());
+    const tallies = weeks.map(week => Core.tally(records(state.weeks[week.key])));
+    const weekRow = (key, label, won, used, total) => `<button class="row${total ? ' total' : ''}" type="button" data-week="${key}" aria-label="${label.replace(/<.*/, '')}：抽中 ${mop(won)}，已用 ${mop(used)}"><span>${label}</span>${cells(won, used)}</button>`;
+    $('weeksBox').hidden = !weeks.length;
+    $('weekList').innerHTML = head('抽中', '已用')
+      + weekRow('all', '全期', sum(tallies, t => t.won), sum(tallies, t => t.used), true)
+      + weeks.map((week, index) => weekRow(week.key, `${weekName(week)}<small>${weekDates(week)}</small>`, tallies[index].won, tallies[index].used)).join('');
+
     $('walletSettings').innerHTML = MEMBERS.map(member => `<fieldset class="chips"><legend>${esc(member)}</legend>${WALLETS.map(wallet =>
       `<label><input type="checkbox" data-wallet="${esc(member)}|${esc(wallet)}"${state.wallets[member][wallet] ? ' checked' : ''}><span>${esc(wallet)}</span></label>`).join('')}</fieldset>`).join('');
+  }
+
+  const drawText = list => list.map(c => ({ gov: c.amount, merchant: '商戶', gift: '禮遇' })[c.type] || '—').join(' · ');
+  const weekName = week => (week.key === state.week?.key ? '本週' : `第 ${week.number} 週`);
+  const weekDates = week => [week.start, week.end].map(day => `${Number(day.slice(5, 7))}/${Number(day.slice(8))}`).join(' – ');
+
+  // One week, or the whole campaign (`key` "all"), read only: totals, who was luckiest, and every wallet's draws.
+  function openWeekSheet(key) {
+    const weeks = Core.weeks(Core.macauDate());
+    const week = weeks.find(w => w.key === key);
+    const sets = (week ? [week] : weeks).map(w => records(state.weeks[w.key]));
+    const all = sets.flat();
+    const total = field => sum(sets, set => Core.tally(set)[field]); // week by week: a payment belongs to one week
+    const luck = Core.luck(all);
+    const top = entry => `${esc(entry.name)} · ${mop(entry.won)}`;
+    const wallets = MEMBERS.flatMap(member => WALLETS.map(payment => ({ member, payment, draws: all.filter(c => c.member === member && c.payment === payment) }))).filter(w => w.draws.length);
+    const tally = list => { const t = Core.tally(list); return cells(t.won, t.used); };
+    openSheet({
+      title: week ? `${weekName(week)} · ${weekDates(week)}` : '全期',
+      body: !all.length ? '<p class="note">沒有登記</p>' : readout([
+        ['抽中', mop(total('won'))], ['已用', mop(total('used'))], ['給商家', mop(total('spend'))], ['自付', mop(total('pay'))],
+        ...(luck.member ? [['手氣王', top(luck.member)]] : []), ...(luck.wallet ? [['最旺錢包', top(luck.wallet)]] : []),
+        ...(luck.merchant ? [['商戶券', `${luck.merchant} 張`]] : []), ...(luck.gift ? [['禮遇券', `${luck.gift} 張`]] : [])
+      ]) + head('抽中', '已用')
+        + byMember(wallets, mine => tally(mine.flatMap(w => w.draws)), w => `<div class="row"><span>${esc(w.payment)}${week ? `<small>${drawText(w.draws)}</small>` : ''}</span>${tally(w.draws)}</div>`),
+      ok: ''
+    });
+  }
+
+  // Everything as one file, in the same shape as the database.
+  function exportBackup() {
+    const data = {
+      campaign: '2026R2', exportedAt: new Date().toISOString(),
+      weeks: Object.fromEntries(Object.entries(state.weeks).map(([key, coupons]) => [key, { coupons }])),
+      settings: { wallets: state.wallets }
+    };
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    link.download = `消費券備份-${Core.macauDate()}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    toast('已匯出備份');
   }
 
   function openRegisterSheet(member, payment) {
@@ -289,6 +364,7 @@
     sheetAction = action;
     updateSheetOk();
     $('sheet').showModal();
+    $('sheet').scrollTop = 0; // a long sheet opens at its top, not at the focused button
     history.pushState({ sheet: true }, ''); // so the phone's back button closes the sheet
   }
 
@@ -322,6 +398,11 @@
     renderUse();
   });
   $('merchantOk').addEventListener('change', () => { state.merchantOk = $('merchantOk').checked; renderUse(); });
+  $('who').addEventListener('change', event => {
+    const member = event.target.dataset.member;
+    if (event.target.checked) state.skip.delete(member); else state.skip.add(member);
+    renderUse();
+  });
   $('clearPrice').addEventListener('click', () => {
     $('price').value = '';
     state.price = null;
@@ -329,7 +410,7 @@
     $('price').focus();
   });
   $('markPlan').addEventListener('click', () => {
-    const result = Core.plan(Core.wallets(state.coupons, { merchant: state.merchantOk }), state.price);
+    const result = currentPlan();
     $('price').value = '';
     state.price = null;
     markUsed(result.payments);
@@ -339,12 +420,17 @@
     if (row) openUseSheet(...row.dataset.use.split('|'));
   });
   $('usedList').addEventListener('click', event => {
-    const button = event.target.closest('[data-undo]');
-    if (button) markUnused(button.dataset.undo.split(','));
+    const row = event.target.closest('[data-used]');
+    if (row) openUsedSheet(row.dataset.used);
   });
+  $('export').addEventListener('click', exportBackup);
   $('regList').addEventListener('click', event => {
     const row = event.target.closest('[data-reg]');
     if (row) openRegisterSheet(...row.dataset.reg.split('|'));
+  });
+  $('weekList').addEventListener('click', event => {
+    const row = event.target.closest('[data-week]');
+    if (row) openWeekSheet(row.dataset.week);
   });
   $('walletSettings').addEventListener('change', event => {
     const [member, wallet] = event.target.dataset.wallet.split('|');

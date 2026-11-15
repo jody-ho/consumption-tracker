@@ -51,14 +51,13 @@ test('plan: price too small for any voucher', () => {
   assert.equal(result.face, 0);
   assert.equal(result.pay, 25);
   assert.equal(result.least, 30);
-  assert.equal(result.left, 210);
+  assert.deepEqual([result.exact, result.next], [false, { more: 5, gain: 10 }]);
 });
 
 test('plan: one wallet is enough and takes the whole price', () => {
   const result = Core.plan(Core.wallets(family), 65);
   assert.equal(result.payments.length, 1);
   assert.deepEqual([result.payments[0].spend, result.payments[0].face, result.payments[0].pay], [65, 20, 45]);
-  assert.equal(result.left, 190);
 });
 
 test('plan: splits across wallets to use the most vouchers', () => {
@@ -73,8 +72,7 @@ test('plan: splits across wallets to use the most vouchers', () => {
 test('plan: price covers everything, the extra goes on one payment', () => {
   const result = Core.plan(Core.wallets(family), 700);
   assert.equal(result.face, 210);
-  assert.equal(result.left, 0);
-  assert.equal(result.full, 630);
+  assert.deepEqual([result.exact, result.next], [false, null]);
   assert.equal(result.pay, 490);
   assert.equal(result.payments.length, 4);
   assert.equal(result.payments.reduce((total, p) => total + p.spend, 0), 700);
@@ -82,16 +80,73 @@ test('plan: price covers everything, the extra goes on one payment', () => {
 });
 
 test('plan: exact threshold and cents', () => {
-  assert.equal(Core.plan(Core.wallets(family), 630).left, 0);
+  assert.deepEqual([Core.plan(Core.wallets(family), 630).face, Core.plan(Core.wallets(family), 630).exact], [210, true]);
   const result = Core.plan(Core.wallets(family), 199.5);
   assert.equal(result.face, 60);
   assert.equal(result.pay, 139.5);
   assert.equal(result.payments.reduce((total, p) => total + p.spend, 0), 199.5);
 });
 
+test('plan: how much more to buy for the next coupon, or exactly right', () => {
+  const list = Core.wallets(family);
+  let result = Core.plan(list, 400); // 330 + 60 used; 420 would add the MOP 10 voucher
+  assert.deepEqual([result.off, result.exact, result.next], [130, false, { more: 20, gain: 10 }]);
+  result = Core.plan(list, 390);
+  assert.deepEqual([result.off, result.exact], [130, true]);
+  result = Core.plan(list, 59.5);
+  assert.deepEqual([result.off, result.next], [10, { more: 0.5, gain: 10 }]);
+  const dad = list.filter(w => w.member === '爸爸'); // only one person's coupons
+  result = Core.plan(dad, 400);
+  assert.deepEqual([result.off, result.payments.length, result.next], [20, 1, null]);
+  const merchant = Core.wallets({ g: coupon('媽媽', '大豐', 20), m: coupon('媽媽', '大豐', 12, false, 'merchant') }, { merchant: true });
+  assert.deepEqual(Core.plan(merchant, 80).next, { more: 20, gain: 12 });
+});
+
+test('weeks started so far, newest first', () => {
+  assert.deepEqual(Core.weeks('2026-10-08'), []);
+  assert.deepEqual(Core.weeks('2026-10-16'), [
+    { key: '2026R2-W2', number: 2, start: '2026-10-16', end: '2026-10-22' },
+    { key: '2026R2-W1', number: 1, start: '2026-10-09', end: '2026-10-15' }
+  ]);
+  assert.equal(Core.weeks('2026-12-17').length, 10);
+  assert.equal(Core.weeks('2027-01-01').length, 10);
+  assert.equal(Core.weeks('2027-01-01')[0].end, Core.END);
+});
+
+const rows = map => Object.entries(map).map(([id, c]) => ({ id, ...c }));
+
+test('payments: used coupons grouped per payment, with saved or estimated amounts', () => {
+  const saved = { transactionId: 't1', actualSpendCents: 25000, actualPaidCents: 18800 };
+  const paid = Core.payments(rows({
+    a: { ...coupon('媽媽', '大豐', 50, true), redemption: saved },
+    b: { ...coupon('媽媽', '大豐', 12, true, 'merchant'), redemption: saved },
+    c: { ...coupon('媽媽', '大豐', 10, true), redemption: { transactionId: 't2' } }, // an older row without amounts
+    d: coupon('爸爸', 'MPay', 20, true), // no redemption at all
+    e: { ...coupon('爸爸', 'MPay', 12, true, 'merchant'), usedAt: 9 },
+    f: coupon('爸爸', 'MPay', 100), g: coupon('爸爸', 'MPay', 0, true, 'gift')
+  }));
+  assert.deepEqual(paid.map(p => [p.member, p.payment, p.face, p.merchant, p.ids.join(), p.off, p.spend, p.pay]), [
+    ['媽媽', '大豐', 50, true, 'a,b', 62, 250, 188],
+    ['媽媽', '大豐', 10, false, 'c', 10, 30, 20],
+    ['爸爸', 'MPay', 20, false, 'd', 20, 60, 40],
+    ['爸爸', 'MPay', 0, true, 'e', 12, 100, 88]
+  ]);
+});
+
+test('tally counts e-vouchers drawn and used, and what was paid', () => {
+  assert.deepEqual(Core.tally(rows(family)), { won: 410, used: 200, spend: 600, pay: 400 });
+  assert.deepEqual(Core.tally([]), { won: 0, used: 0, spend: 0, pay: 0 });
+});
+
+test('luck: the luckiest person and wallet, ties in family order', () => {
+  assert.deepEqual(Core.luck(rows(family)), { member: { name: '爸爸', won: 220 }, wallet: { name: 'MPay', won: 220 }, merchant: 1, gift: 0 });
+  assert.deepEqual(Core.luck(rows({ a: coupon('媽媽', '工銀', 50), b: coupon('爸爸', 'MPay', 50), c: coupon('姐姐', '中銀', 0, false, 'gift') })).member, { name: '爸爸', won: 50 });
+  assert.deepEqual(Core.luck([]), { member: null, wallet: null, merchant: 0, gift: 0 });
+});
+
 test('plan: no vouchers at all', () => {
   const result = Core.plan([], 100);
-  assert.deepEqual([result.payments.length, result.face, result.pay, result.left, result.full, result.least], [0, 0, 100, 0, 0, 0]);
+  assert.deepEqual([result.payments.length, result.face, result.pay, result.least, result.exact, result.next], [0, 0, 100, 0, false, null]);
 });
 
 test('merchant coupons are ignored unless asked for', () => {

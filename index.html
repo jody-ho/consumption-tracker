@@ -26,12 +26,13 @@
         <button id="clearPrice" type="button" aria-label="清除價錢" hidden>×</button>
       </label>
       <label id="merchantBox" class="check" hidden><input id="merchantOk" type="checkbox"><span>這間店可用商戶券</span></label>
+      <fieldset id="who" class="chips who" aria-label="用哪些家人的券" hidden></fieldset>
       <p id="verdict" class="verdict" role="status" hidden></p>
       <div id="useList"></div>
       <button id="markPlan" class="primary" type="button" hidden>已付款，記為已用</button>
       <details id="usedBox" hidden>
         <summary id="usedSummary"></summary>
-        <div id="usedList" class="list"></div>
+        <div id="usedList"></div>
       </details>
     </section>
 
@@ -39,7 +40,12 @@
     <section id="register" aria-labelledby="regCaption" hidden>
       <p id="regCaption" class="caption"></p>
       <div id="regList"></div>
-      <details>
+      <details id="weeksBox" hidden>
+        <summary>各週抽中的券</summary>
+        <div id="weekList"></div>
+        <button id="export" class="plain" type="button">匯出備份</button>
+      </details>
+      <details id="walletBox">
         <summary>錢包設定</summary>
         <div id="walletSettings"></div>
       </details>

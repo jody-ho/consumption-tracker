@@ -32,6 +32,56 @@
     return { key: `2026R2-W${index + 1}`, end, daysLeft: toDay(end) - toDay(dateKey) };
   }
 
+  // Every week that has started by `dateKey`, newest first.
+  function weeks(dateKey) {
+    const all = Math.floor((toDay(END) - toDay(START)) / 7) + 1;
+    const started = dateKey < START ? 0 : Math.min(all, Math.floor((toDay(dateKey) - toDay(START)) / 7) + 1);
+    return Array.from({ length: started }, (_, index) => {
+      const first = toDay(START) + index * 7;
+      return { key: `2026R2-W${index + 1}`, number: index + 1, start: fromDay(first), end: fromDay(first + 6) };
+    }).reverse();
+  }
+
+  // Used coupons, one entry per payment made. `records` are stored rows, each with its `id`.
+  // Amounts are the ones saved with the payment; rows saved without them get the smallest spend that fits.
+  function payments(records) {
+    const groups = new Map();
+    for (const c of records) {
+      if (!c.used || !['gov', 'merchant'].includes(c.type)) continue;
+      const key = `${c.member}|${c.payment}|${c.redemption?.transactionId || c.usedAt || c.id}`;
+      const group = groups.get(key) || { member: c.member, payment: c.payment, face: 0, merchant: false, ids: [], saved: null };
+      if (c.type === 'gov') group.face += c.amount; else group.merchant = true;
+      group.ids.push(c.id);
+      if (Number.isFinite(c.redemption?.actualSpendCents) && Number.isFinite(c.redemption?.actualPaidCents)) group.saved = c.redemption;
+      groups.set(key, group);
+    }
+    return [...groups.values()].map(({ saved, ...group }) => {
+      const off = group.face + (group.merchant ? MERCHANT.off : 0);
+      const spend = saved ? saved.actualSpendCents / 100
+        : Math.max(group.face * MULTIPLE + (group.merchant ? MERCHANT.off : 0), group.merchant ? MERCHANT.min : 0);
+      return { ...group, off, spend, pay: saved ? saved.actualPaidCents / 100 : spend - off };
+    });
+  }
+
+  // E-voucher value drawn and used in `records`, and what was paid to shops and out of pocket to use it.
+  function tally(records) {
+    const gov = records.filter(c => c.type === 'gov');
+    const paid = payments(records);
+    return {
+      won: sum(gov, c => c.amount), used: sum(gov.filter(c => c.used), c => c.amount),
+      spend: round(sum(paid, p => p.spend)), pay: round(sum(paid, p => p.pay))
+    };
+  }
+
+  // For fun: who and which wallet drew the most e-voucher value (ties go to family order), and the other prizes.
+  function luck(records) {
+    const gov = records.filter(c => c.type === 'gov');
+    const top = (names, field) => names.map(name => ({ name, won: sum(gov.filter(c => c[field] === name), c => c.amount) }))
+      .filter(entry => entry.won).sort((a, b) => b.won - a.won)[0] || null;
+    const count = type => records.filter(c => c.type === type).length;
+    return { member: top(MEMBERS, 'member'), wallet: top(WALLETS, 'payment'), merchant: count('merchant'), gift: count('gift') };
+  }
+
   // What the payment app does by itself: largest voucher first, each one uses up face × 3 of the payment.
   function applied(coupons, spend) {
     let left = spend;
@@ -70,6 +120,7 @@
   // Each wallet pays once. Fewer payments win a tie.
   function plan(walletList, price) {
     const better = (a, b) => a.off !== b.off ? a.off > b.off : a.picks.length < b.picks.length;
+    const reach = price + MULTIPLE * Math.max(...FACES); // far enough past `price` to find the next coupon
     let states = new Map([[0, { off: 0, picks: [] }]]);
     for (const wallet of walletList) {
       const options = new Map();
@@ -79,7 +130,7 @@
         if (mask) spends.push([need, false]);
         if (wallet.merchantId) spends.push([Math.max(MERCHANT.min, need + MERCHANT.off), true]);
         for (const [spend, merchant] of spends) {
-          if (spend > price) continue;
+          if (spend > reach) continue;
           const option = settle(wallet, spend, merchant);
           const key = `${spend}|${merchant}`;
           if (!options.has(key)) options.set(key, option);
@@ -88,14 +139,19 @@
       const next = new Map(states);
       for (const [spent, state] of states) for (const option of options.values()) {
         const total = spent + option.spend;
-        if (total > price) continue;
+        if (total > reach) continue;
         const candidate = { off: state.off + option.off, picks: [...state.picks, option] };
         if (!next.has(total) || better(candidate, next.get(total))) next.set(total, candidate);
       }
       states = next;
     }
     let best = { off: 0, picks: [] }, bestSpent = 0;
-    for (const [spent, state] of states) if (better(state, best)) { best = state; bestSpent = spent; }
+    for (const [spent, state] of states) if (spent <= price && better(state, best)) { best = state; bestSpent = spent; }
+    // The cheapest bigger purchase that takes more off.
+    let next = null;
+    for (const [spent, state] of states) {
+      if (spent > price && state.off > best.off && (!next || spent < next.spent)) next = { spent, off: state.off };
+    }
 
     // Whatever the coupons don't need goes on the largest payment.
     const picks = [...best.picks];
@@ -106,7 +162,6 @@
     }
     const face = sum(picks, pick => pick.face);
     const off = sum(picks, pick => pick.off);
-    const total = sum(walletList, wallet => wallet.face);
     const faces = walletList.flatMap(w => w.coupons.map(c => c.face));
     const least = [...faces.map(f => f * MULTIPLE), ...(walletList.some(w => w.merchantId) ? [MERCHANT.min] : [])];
     return {
@@ -118,13 +173,13 @@
       face, // e-voucher value used
       off, // everything taken off, merchant coupons included
       pay: round(price - off), // what the family pays
-      left: total - face, // e-voucher value still unused afterwards
-      full: total * MULTIPLE, // price needed to use every e-voucher
-      least: least.length ? Math.min(...least) : 0 // smallest price that uses anything
+      least: least.length ? Math.min(...least) : 0, // smallest price that uses anything
+      exact: off > 0 && rest === 0, // every dollar of the price counts towards a coupon
+      next: next ? { more: round(next.spent - price), gain: next.off - best.off } : null // buy `more` extra to take `gain` more off
     };
   }
 
-  const api = { MEMBERS, WALLETS, FACES, MULTIPLE, MERCHANT, START, END, macauDate, week, applied, wallets, plan };
+  const api = { MEMBERS, WALLETS, FACES, MULTIPLE, MERCHANT, START, END, macauDate, week, weeks, payments, tally, luck, applied, wallets, plan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
