@@ -80,11 +80,11 @@
   const head = (first, second) => `<div class="cols" aria-hidden="true"><span></span><span>${first}</span><span>${second}</span></div>`;
   const cells = (first, second) => `<span>${num(first)}</span><span>${num(second)}</span>`;
   const readout = lines => `<dl class="readout">${lines.map(([label, value, big]) => `<div${big ? ' class="big"' : ''}><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
-  // One card per family member: the name, the member's rows, and a subtotal line when there are several rows.
+  // One card per family member (`data-m` picks the member's colour): the name, the member's rows, and a subtotal line when there are several rows.
   const byMember = (items, row, subtotal) => MEMBERS.map(member => {
     const mine = items.filter(item => item.member === member);
     if (!mine.length) return '';
-    return `<section class="person"><h3>${esc(member)}</h3>${mine.map(row).join('')}${subtotal && mine.length > 1 ? `<div class="row sub"><span>小計</span>${subtotal(mine)}</div>` : ''}</section>`;
+    return `<section class="person" data-m="${MEMBERS.indexOf(member)}"><h3>${esc(member)}</h3>${mine.map(row).join('')}${subtotal && mine.length > 1 ? `<div class="row sub"><span>小計</span>${subtotal(mine)}</div>` : ''}</section>`;
   }).join('');
   // Coupons as tags, so they never look like the amounts beside them. Each is [text, extra class].
   const tags = list => `<span class="tags">${list.map(([text, kind = '']) => `<b class="${kind}">${text}</b>`).join('')}</span>`;
@@ -207,7 +207,7 @@
     const owners = MEMBERS.filter(member => (price && state.merchantOk ? withMerchant : list).some(w => w.member === member));
     $('who').hidden = owners.length < 2;
     $('who').innerHTML = owners.map(member =>
-      `<label><input type="checkbox" data-member="${esc(member)}"${state.skip.has(member) ? '' : ' checked'}><span>${esc(member)}</span></label>`).join('');
+      `<label data-m="${MEMBERS.indexOf(member)}"><input type="checkbox" data-member="${esc(member)}"${state.skip.has(member) ? '' : ' checked'}><span>${esc(member)}</span></label>`).join('');
     const result = price ? currentPlan() : null;
     $('verdict').hidden = !result;
     $('markPlan').hidden = !result?.payments.length;
