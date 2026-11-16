@@ -78,11 +78,10 @@
     .map(([id, c]) => ({ id, ...c }));
   const draws = (member, payment) => records(state.coupons).filter(c => c.member === member && c.payment === payment);
 
-  // Every list is the same table: a label, then two numbers.
+  // Every list is the same table: a label, then the numbers.
   const head = (...labels) => `<div class="cols" aria-hidden="true"><span></span>${labels.map(label => `<span>${label}</span>`).join('')}</div>`;
   const cells = (...values) => `<span>${values.map(num).join('</span><span>')}</span>`;
-  const MONEY = ['給商家', '自付']; // what the shop is paid, and what comes out of pocket after the coupons
-  const HISTORY = ['抽中', ...MONEY]; // past weeks also show the e-voucher value drawn
+  const HISTORY = ['抽中', '給商家', '自付']; // every list's numbers: e-voucher value, what the shop is paid, what comes out of pocket after the coupons
   const whole = (...values) => cells(...values.map(Math.round)); // three numbers share a row there, so no cents
   const readout = lines => `<dl class="readout">${lines.map(([label, value, big]) => `<div${big ? ' class="big"' : ''}><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
   // One card per family member (`data-m` picks the member's colour): the name with the column names beside it,
@@ -221,8 +220,8 @@
     const result = price ? currentPlan() : null;
     $('verdict').hidden = !result;
     $('markPlan').hidden = !result?.payments.length;
-    const columns = head(...MONEY);
-    const subtotal = mine => cells(sum(mine, item => item.spend), sum(mine, item => item.pay));
+    const columns = head(...HISTORY);
+    const subtotal = mine => cells(sum(mine, item => item.face), sum(mine, item => item.spend), sum(mine, item => item.pay));
 
     if (result) {
       const left = total - result.face; // of the whole family's e-vouchers
@@ -232,8 +231,8 @@
           : `券減 ${mop(result.off)}，電子券${left ? `還剩 ${mop(left)}` : '全部用完'}${hint ? `<small>${hint}</small>` : ''}`;
       $('verdict').classList.toggle('good', Boolean(result.off) && !left);
       $('useList').innerHTML = !result.payments.length ? '' : columns
-        + `<div class="row total"><span>合計</span>${cells(price, result.pay)}</div>`
-        + byMember(result.payments, p => `<div class="row"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.spend, p.pay)}</div>`, subtotal, MONEY);
+        + `<div class="row total"><span>合計</span>${cells(result.face, price, result.pay)}</div>`
+        + byMember(result.payments, p => `<div class="row"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${cells(p.face, p.spend, p.pay)}</div>`, subtotal, HISTORY);
     } else if (!total) {
       const nothingYet = week && !Object.keys(state.coupons).length;
       $('useList').innerHTML = nothingYet ? '<a class="primary" href="#register">登記抽獎結果</a>' : '';
@@ -241,17 +240,17 @@
       const shown = list.filter(w => !state.skip.has(w.member));
       $('useList').innerHTML = !shown.length ? '' : columns
         + `<div class="row total"><span>${shown.length === list.length ? '全家' : '合計'}</span>${subtotal(shown)}</div>`
-        + byMember(shown, w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：券 ${w.coupons.map(c => c.face).join('、')}，給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}${faceTags(w.coupons.map(c => c.face))}</span>${cells(w.spend, w.pay)}</button>`, subtotal, MONEY);
+        + byMember(shown, w => `<button class="row" type="button" data-use="${esc(w.member)}|${esc(w.payment)}" aria-label="${esc(w.member)} ${esc(w.payment)}：券 ${w.coupons.map(c => c.face).join('、')}，給商家 ${mop(w.spend)}，自付 ${mop(w.pay)}"><span>${esc(w.payment)}${faceTags(w.coupons.map(c => c.face))}</span>${cells(w.face, w.spend, w.pay)}</button>`, subtotal, HISTORY);
     }
 
     // Used this week, one row per payment made: what the shop got and what was paid out of pocket.
     const used = Core.payments(records(state.coupons));
     $('usedBox').hidden = !used.length;
     $('usedSummary').textContent = `已用電子券 ${mop(sum(used, p => p.face))}`;
-    const paid = mine => whole(sum(mine, p => p.spend), sum(mine, p => p.pay)); // real amounts can have cents; the list shows whole MOP
+    const paid = mine => whole(sum(mine, p => p.face), sum(mine, p => p.spend), sum(mine, p => p.pay)); // real amounts can have cents; the list shows whole MOP
     $('usedList').innerHTML = columns
       + `<div class="row total"><span>全家</span>${paid(used)}</div>`
-      + byMember(used, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${paid([p])}</button>`, paid, MONEY);
+      + byMember(used, p => `<button class="row" type="button" data-used="${esc(p.ids.join(','))}" aria-label="${esc(p.member)} ${esc(p.payment)}：給商家 ${mop(p.spend)}，自付 ${mop(p.pay)}"><span>${esc(p.payment)}${faceTags(p.faces, p.merchant)}</span>${paid([p])}</button>`, paid, HISTORY);
   }
 
   // The best way to pay the price typed in, using only the ticked family members' coupons.
@@ -542,7 +541,8 @@
   document.addEventListener('visibilitychange', checkDate);
   setInterval(checkDate, 60000);
 
-  if (history.state?.sheet) history.replaceState(null, ''); // reloaded while a sheet was open
+  // Opening the site always starts on 用券, whatever page was showing last time; this also clears a sheet left open by a reload.
+  if (history.state?.sheet || location.hash) history.replaceState(null, '', location.pathname + location.search);
   loadCache();
   render();
   connect();
